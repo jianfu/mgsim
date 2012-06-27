@@ -370,6 +370,14 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecSync(cons
     return PIPE_CONTINUE;
 }
 
+//FT-BEGIN
+Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecPend()
+{
+    m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
+    return PIPE_CONTINUE;
+}
+//FT-END
+
 Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecDetach(const FID& fid)
 {
     if (fid.pid == 0 && fid.lfid == 0 && fid.capability == 0)
