@@ -1120,6 +1120,10 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                 case A_UTHREAD_PUTG:     return WriteFamilyRegister(RRT_GLOBAL,          RT_INTEGER, fid, m_input.regofs); 
                 case A_UTHREAD_PUTS:     return WriteFamilyRegister(RRT_FIRST_DEPENDENT, RT_INTEGER, fid, m_input.regofs); 
                 case A_UTHREAD_DETACH:   return ExecDetach(fid); 
+				
+				//FT-BEGIN
+				case A_UTHREAD_PEND:     return ExecPend();
+				//FT-END
 
                 case A_UTHREAD_SYNC:     return ExecSync(fid);
                 case A_UTHREAD_GETG:     return ReadFamilyRegister(RRT_GLOBAL,      RT_INTEGER, fid, m_input.regofs);
