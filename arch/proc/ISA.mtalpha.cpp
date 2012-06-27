@@ -1132,8 +1132,11 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                 PlaceID place  = m_parent.GetProcessor().UnpackPlace(Rav);
                 bool suspend   = (m_input.function & A_UTHREAD_ALLOC_S_MASK);
                 bool exclusive = (m_input.function & A_UTHREAD_ALLOC_X_MASK);
-
-                return ExecAllocate(place, m_input.Rc.index, suspend, exclusive, flags);
+				//FT-BEGIN
+				bool redundant = (m_input.function & A_UTHREAD_ALLOC_R_MASK);
+	
+                return ExecAllocate(place, m_input.Rc.index, suspend, exclusive, redundant, flags);
+				//FT-END
             }
             else if ((m_input.function & A_UTHREAD_CREB_MASK) == A_UTHREAD_CREB_VALUE)
             {

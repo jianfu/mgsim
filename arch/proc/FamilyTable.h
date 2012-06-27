@@ -93,6 +93,12 @@ struct Family
 
     RegInfo      regs[NUM_REG_TYPES];    // Register information
 
+	//FT-BEGIN
+	bool redundant;
+	FID  corr_fid;
+	TSize threadCount;   //The distance of thread creation between master family and redundant family
+	//FT-END
+	
     // Admin
     FamilyState  state;          // Family state
 };

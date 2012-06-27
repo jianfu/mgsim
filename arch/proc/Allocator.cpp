@@ -323,6 +323,11 @@ bool Processor::Allocator::AllocateThread(LFID fid, TID tid, bool isNewlyAllocat
     thread->nextInBlock      = INVALID_TID;
     thread->waitingForWrites = false;
     thread->next             = INVALID_TID;
+	
+	//FT-BEGIN
+	thread->mtid             = INVALID_TID;
+	thread->regIndex         = INVALID_REG_INDEX;
+	//FT-END
 
     // Initialize dependencies
     thread->dependencies.prevCleanedUp    = family->prevCleanedUp || !family->hasShareds || family->dependencies.numThreadsAllocated == 0 || family->physBlockSize == 1;
@@ -514,6 +519,9 @@ bool Processor::Allocator::DecreaseFamilyDependency(LFID fid, Family& family, Fa
                 msg.type        = LinkMessage::MSG_DONE;
                 msg.done.fid    = family.link;
                 msg.done.broken = family.broken;
+				//FT-BEGIN
+				msg.redundant   = family.redundant;
+				//FT-END
 
                 if (!m_network.SendMessage(msg))
                 {
@@ -693,6 +701,13 @@ FCapability Processor::Allocator::InitializeFamily(LFID fid) const
         family.lastAllocated = INVALID_TID;
         family.prevCleanedUp = false;
         family.broken        = false;
+		
+		//FT-BEGIN
+		family.redundant     = false;
+		family.corr_fid      = INVALID_LFID
+		family.threadCount   = 0;
+		//FT-END
+		
 
         // Dependencies
         family.dependencies.allocationDone      = false;
@@ -832,6 +847,48 @@ Result Processor::Allocator::DoThreadAllocate()
         m_cleanup.Pop();
 
         assert(thread.state == TST_TERMINATED);
+		
+		//FT-BEGIN
+		//master family  
+		if (!family.redundant)
+		{	
+			//the mathing thread in redundant thread is not created
+			if (family.threadCount == 0)
+			{
+				m_cleanup.Push(tid);
+				return SUCCESS;
+			}
+			else
+			{
+				family.threadCount--;
+				
+				RemoteMessage msg;
+				msg.type                   = RemoteMessage::MSG_MASTERTID;
+				msg.mtid.fid               = family.corr_fid;
+				msg.mtid.tid               = tid;
+				msg.mtid.index             = family.start;
+				
+				if (!m_network.SendMessage(msg))
+				{
+					DeadlockWrite("Unable to send masterTID, m_cleanup");
+					return FAILED;
+				}
+			}
+		}
+		else //redundant family
+		{//send message to make 'threadCount' in master family increment 
+			RemoteMessage msg;
+            msg.type                   = RemoteMessage::MSG_THREADCOUNT;
+            msg.tc.fid                 = family.corr_fid;
+            
+            if (!m_network.SendMessage(msg))
+            {
+                DeadlockWrite("Unable to send threadCount, m_cleanup");
+                return FAILED;
+            }
+            
+		}	
+		//FT-END
 
         // Clear the thread's dependents, if any
         for (size_t i = 0; i < NUM_REG_TYPES; i++)
@@ -905,7 +962,8 @@ Result Processor::Allocator::DoThreadAllocate()
         // Allocate an initial thread of a family
         LFID    fid    = m_alloc.Front();
         Family& family = m_familyTable[fid];
-
+	
+		
         // Check if we're done with the initial allocation of this family
         if (family.dependencies.numThreadsAllocated == family.physBlockSize || family.dependencies.allocationDone)
         {
@@ -937,7 +995,46 @@ Result Processor::Allocator::DoThreadAllocate()
                 DeadlockWrite("F%u unable to allocate a free thread entry", (unsigned)fid);
                 return FAILED;
             }
-            
+			
+			//FT-BEGIN
+			//master family  
+			if (!family.redundant)
+			{	
+				//the mathing thread in redundant thread is not created
+				if (family.threadCount == 0)
+					return SUCCESS;
+				else
+				{
+					family.threadCount--;
+					
+					RemoteMessage msg;
+					msg.type                   = RemoteMessage::MSG_MASTERTID;
+					msg.mtid.fid               = family.corr_fid;
+					msg.mtid.tid               = tid;
+					msg.mtid.index             = family.start;
+					
+					if (!m_network.SendMessage(msg))
+					{
+						DeadlockWrite("Unable to send masterTID，m_alloc");
+						return FAILED;
+					}
+				}
+			}
+			else //redundant family
+			{//send message to make 'threadCount' in master family increment 
+				RemoteMessage msg;
+				msg.type                   = RemoteMessage::MSG_THREADCOUNT;
+				msg.tc.fid                 = family.corr_fid;
+				
+				if (!m_network.SendMessage(msg))
+				{
+					DeadlockWrite("Unable to send threadCount, m_alloc");
+					return FAILED;
+				}
+				
+			}	
+			//FT-END
+			            
             if (!AllocateThread(fid, tid, true))
             {
                 DeadlockWrite("F%u/T%u unable to activate", (unsigned)fid, (unsigned)tid);
@@ -988,7 +1085,10 @@ bool Processor::Allocator::QueueFamilyAllocation(const RemoteMessage& msg, bool 
     request.completion_reg = msg.allocate.completion_reg;
     request.completion_pid = msg.allocate.completion_pid;
     request.bundle         = bundle;
-    
+    //FT-BEGIN
+	request.redundant      = msg.allocate.redundant;
+	//FT-END
+	
     if (bundle)
     {
         request.pc         = msg.allocate.bundle.pc;
@@ -1032,6 +1132,10 @@ bool Processor::Allocator::QueueFamilyAllocation(const LinkMessage& msg)
     request.pc             = 0;
     request.parameter      = 0;
     request.index          = 0;
+	
+	//FT-BEGIN
+	request.redundant      = msg.redundant;
+	//FT-END
 
     Buffer<AllocRequest>& allocations = (msg.allocate.suspend ? m_allocRequestsSuspend : m_allocRequestsNoSuspend);
     if (!allocations.Push(request))
@@ -1169,6 +1273,9 @@ Result Processor::Allocator::DoFamilyAllocate()
             ret.next_fid       = INVALID_LFID;
             ret.completion_pid = req.completion_pid;
             ret.completion_reg = req.completion_reg;
+			//FT-BEGIN
+			ret.redundant      = req.redundant;
+			//FT-END
             if (!m_network.SendAllocResponse(ret))
             {
                 return FAILED;
@@ -1180,9 +1287,10 @@ Result Processor::Allocator::DoFamilyAllocate()
         }
     }
     // Allocation succeeded
-    else if (req.type == ALLOCATE_SINGLE || (m_parent.GetPID() + 1) % req.placeSize == 0)
+    else if (req.type == ALLOCATE_SINGLE || (((m_parent.GetPID() + 1) % req.placeSize == 0) && !req.redundant) || (((m_parent.GetPID() + 2) % req.placeSize == 0) && req.redundant))
     {
-        // We've grabbed the last context that we wanted in the place
+        //FT-the last core for m_link and m_rlink
+		// We've grabbed the last context that we wanted in the place
         Family& family = m_familyTable[lfid];
         COMMIT
         {
@@ -1228,6 +1336,10 @@ Result Processor::Allocator::DoFamilyAllocate()
                 ret.next_fid       = lfid;
                 ret.completion_pid = req.completion_pid;
                 ret.completion_reg = req.completion_reg;
+				//FT-BEGIN
+				ret.redundant      = req.redundant;
+				//FT-END
+				
                 if (!m_network.SendAllocResponse(ret))
                 {
                     DeadlockWrite("Unable to send allocation commit");
@@ -1279,7 +1391,9 @@ Result Processor::Allocator::DoFamilyAllocate()
         msg.allocate.suspend        = (req.type == ALLOCATE_EXACT) && (buffer != &m_allocRequestsNoSuspend);
         msg.allocate.completion_pid = req.completion_pid;
         msg.allocate.completion_reg = req.completion_reg;
-        
+        //FT-BEGIN
+		msg.redundant  =  req.redundant;
+		//FT-END
         
         if (!m_network.SendMessage(msg))
         {
@@ -1664,6 +1778,13 @@ Result Processor::Allocator::DoFamilyCreate()
             msg.create.fid      = family.link;
             msg.create.numCores = family.numCores - 1;
             msg.create.address  = family.pc;
+			
+			//FT-BEGIN
+			//this core is the 1st core in the place
+			//if it is an odd core, it is a redundnat family; or it is a master family.
+			msg.redundant      = (m_parent.GetPID()%2) ? 1 : 0;
+			//FT-END
+			
             for (size_t i = 0; i < NUM_REG_TYPES; i++)
             {
                 msg.create.regs[i] = family.regs[i].count;
@@ -1778,10 +1899,24 @@ Result Processor::Allocator::DoThreadActivation()
         m_readyThreads2.Pop();
         COMMIT{ m_prevReadyList = &m_readyThreads2; }
     }
-    COMMIT{ --m_numThreadsPerState[TST_READY]; }
+	
+	//FT-BEGIN
+    Thread& thread = m_threadTable[tid];
+	Family& family = m_familyTable[thread.family];
+	if (family.redundant && thread.mtid == INVALID_TID)  //redundant family without mtid
+	{
+		if (m_prevReadyList == &m_readyThreads1)
+			m_readyThreads1.Push(tid);
+		else m_readyThreads2.Push(tid);
+		
+		return SUCCESS;
+	}
+	//FT-END
+	
+	COMMIT{ --m_numThreadsPerState[TST_READY]; }
     
     {
-        Thread& thread = m_threadTable[tid];
+        //Thread& thread = m_threadTable[tid];
 
         // This thread doesn't have a Thread Instruction Buffer yet,
         // so try to get the cache line
@@ -1821,6 +1956,64 @@ Result Processor::Allocator::DoThreadActivation()
         return SUCCESS;
     }
 }
+
+
+//FT-BEGIN
+bool Processor::Allocator::FindReadyThread(LFID fid, TID mtid, uint64_t index)
+{
+	if (!m_readyThreads1.Empty())
+	{
+		TID cur1 = m_readyThreads1.Front();
+		
+		while (cur1 != m_readyThreads1.End())
+		{
+			Thread& thread = m_threadTable[cur1];
+			cur1 = thread.next;
+			
+			if (thread.family == fid && thread.index == index)
+			{
+				thread.mtid = mtid;
+				return true;
+			}
+		}
+		
+		Thread& thread = m_threadTable[cur1];
+		if (thread.family == fid && thread.index == index)
+		{
+			thread.mtid = mtid;
+			return true;
+		}
+		
+	}
+	
+	if (!m_readyThreads2.Empty())
+	{
+		TID cur2 = m_readyThreads2.Front();
+		
+		while (cur2 != m_readyThreads2.End())
+		{
+			Thread& thread = m_threadTable[cur2];
+			cur2 = thread.next;
+			
+			if (thread.family == fid && thread.index == index)
+			{
+				thread.mtid = mtid;
+				return true;
+			}
+		}
+		
+		Thread& thread = m_threadTable[cur2];
+		if (thread.family == fid && thread.index == index)
+		{
+			thread.mtid = mtid;
+			return true;
+		}	
+	}
+	
+	return false;
+}
+//FT-END
+
 
 // Sanitizes the limit and block size.
 // Use only for non-delegated creates.
