@@ -19,11 +19,17 @@ struct RemoteMessage
         MSG_BREAK,          ///< Break
         MSG_RAW_REGISTER,   ///< Raw register response
         MSG_FAM_REGISTER,   ///< Family register request or response
+		//FT-BEGIN
+		MSG_ADDR_REGISTER,  ///< Abosolute register address in 'allocate' of redundant thread
+		MSG_THREADCOUNT,    ///< The distance of thread creation between master family and redundant family 
+		MSG_MASTERTID,      ///< The physic matching master tid for redundant thread
+		//FT-END
     };
         
     Type type;      ///< Type of the message
-        
-    /// The message contents
+	
+    
+	/// The message contents
     union
     {
         struct {
@@ -34,6 +40,9 @@ struct RemoteMessage
             PID            completion_pid;///< PID where the thread runs that issued the allocate
             RegIndex       completion_reg;///< Register to write FID back to
             Bundle         bundle;
+			//FT-BEGIN
+			bool redundant; 
+			//FT-END
         } allocate;
             
         struct {
@@ -85,6 +94,27 @@ struct RemoteMessage
                 RegIndex  completion_reg;
             };
         } famreg;
+		
+		//FT-BEGIN
+		struct
+        {
+            FID           fid;
+            TID           tid;
+            RegIndex      index;
+        } addrreg;
+		
+		struct
+        {
+            FID           fid;
+        } tc;
+		
+		struct
+        {
+            FID           fid;
+			TID			  tid;
+			uint64_t      index;
+        } mtid;
+		//FT-END
     };
 
     std::string str() const;
@@ -106,8 +136,12 @@ struct LinkMessage
     };
         
     Type type;      ///< Type of the message
-        
-    /// The message contents
+    
+	//FT-BEGIN
+	bool redundant; 
+	//FT-END   
+    
+	/// The message contents
     union
     {
         struct
@@ -189,6 +223,11 @@ struct AllocResponse
         
     PID      completion_pid; ///< PID where the thread runs that issued the allocate
     RegIndex completion_reg; ///< Reg on parent_pid of the completion register
+	
+	//FT-BEGIN
+	bool redundant; 
+	//FT-END  
+	
 };   
 
 class Network : public Object, public Inspect::Interface<Inspect::Read>
@@ -316,13 +355,16 @@ private:
     Result DoDelegationOut();
     Result DoDelegationIn();
     Result DoSyncs();
+	//FT-BEGIN
+	Result DorLink();
+    Result DorAllocResponse();
+	//FT-END
 
     Processor&                     m_parent;
     RegisterFile&                  m_regFile;
     FamilyTable&                   m_familyTable;
     Allocator&                     m_allocator;
-    Network*                       m_prev;
-    Network*                       m_next;
+    
     const std::vector<Processor*>& m_grid;
     unsigned int                   m_loadBalanceThreshold;
 
@@ -333,6 +375,14 @@ public:
     RegisterPair<LinkMessage>   m_link;           ///< Forward link through the cores
     RegisterPair<AllocResponse> m_allocResponse;  ///< Backward link for allocation unroll/commit
     
+	Network*                       m_prev;
+    Network*                       m_next;
+	
+	//FT-BEGIN
+	RegisterPair<LinkMessage>   m_rlink;           
+    RegisterPair<AllocResponse> m_rallocResponse;  
+	//FT-END
+	
     // Synchronizations destined for outgoing delegation network.
     // We need this buffer to break the circular depedency between the
     // link and delegation network.
@@ -344,6 +394,12 @@ public:
     Process p_Link;
     Process p_AllocResponse;
     Process p_Syncs;
+	
+	//FT-BEGIN
+	Process p_rLink;
+    Process p_rAllocResponse;
+	//FT-END
+	
 };
 
 #endif

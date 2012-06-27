@@ -45,6 +45,10 @@ public:
 	    MemAddr   	   pc;             ///< For bundled requests, the PC of the newly created family.
 	    Integer   	   parameter;      ///< For bundled requests, the value of the first shared argument.
 	    SInteger   	   index;          ///< For bundled requests, the initial thread index.
+		
+		//FT-BEGIN
+		bool            redundant;
+		//FT-END
 	};
 
     // These are the different states in the state machine for
@@ -124,6 +128,10 @@ public:
     
     TID PopActiveThread();
     
+	//FT-BEGIN
+	bool FindReadyThread(LFID fid, TID mtid, uint64_t index)
+	//FT-END
+	
     // Helpers
     TID  GetRegisterType(LFID fid, RegAddr addr, RegClass* group) const;
     
