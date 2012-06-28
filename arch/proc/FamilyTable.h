@@ -96,7 +96,7 @@ struct Family
 
 	//FT-BEGIN
 	bool redundant;
-	FID  corr_fid;
+	LFID  corr_fid;
 	TSize threadCount;   //The distance of thread creation between master family and redundant family
 	//FT-END
 	

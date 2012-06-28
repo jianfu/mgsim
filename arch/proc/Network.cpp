@@ -129,9 +129,9 @@ bool Processor::Network::SendMessage(const RemoteMessage& msg)
     case RemoteMessage::MSG_FAM_REGISTER: dmsg.dest = msg.famreg.fid.pid; break;
     case RemoteMessage::MSG_BREAK:        dmsg.dest = msg.brk.pid; break;
 	//FT-BEGIN
-	case RemoteMessage::MSG_ADDR_REGISTER: dmsg.dest = msg.addrreg.fid.pid; break;
-	case RemoteMessage::MSG_THREADCOUNT:   dmsg.dest = msg.tc.fid.pid; break;
-	case RemoteMessage::MSG_MASTERTID:   dmsg.dest = msg.mtid.fid.pid; break;
+	case RemoteMessage::MSG_ADDR_REGISTER: dmsg.dest = msg.addrreg.pid; break;
+	case RemoteMessage::MSG_THREADCOUNT:   dmsg.dest = msg.tc.pid; break;
+	case RemoteMessage::MSG_MASTERTID:   dmsg.dest = msg.mtid.pid; break;
 	//FT-END
     default:                              dmsg.dest = INVALID_PID; break;
     }
@@ -891,14 +891,14 @@ Result Processor::Network::DoDelegationIn()
 	case DelegateMessage::MSG_THREADCOUNT:
 	COMMIT
 		{
-			Family& family = m_allocator.GetFamilyChecked(msg.tc.fid.lfid, msg.tc.fid.capability);
+			Family& family = m_familyTable[msg.tc.lfid];
 			family.threadCount++;
 		}
 	break;
 	
 	case DelegateMessage::MSG_MASTERTID:
 		{
-			if(!m_allocator.FindReadyThread(msg.mtid.fid.lfid, msg.mtid.tid, msg.mtid.index))
+			if(!m_allocator.FindReadyThread(msg.mtid.lfid, msg.mtid.tid, msg.mtid.index))
 				return FAILED;
 		}
 	break;

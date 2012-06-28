@@ -98,19 +98,21 @@ struct RemoteMessage
 		//FT-BEGIN
 		struct
         {
-            FID           fid;
+			PID			  pid;
             TID           tid;
             RegIndex      index;
         } addrreg;
 		
 		struct
         {
-            FID           fid;
+			PID			  pid;
+            LFID          lfid;
         } tc;
 		
 		struct
         {
-            FID           fid;
+			PID			  pid;
+            LFID          lfid;
 			TID			  tid;
 			uint64_t      index;
         } mtid;
