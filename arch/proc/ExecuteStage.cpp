@@ -237,7 +237,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecAllocate(
 			COMMIT
 			{
 				m_output.Rrc.type = RemoteMessage::MSG_ADDR_REGISTER;
-				m_output.Rrc.addrreg.fid             = family.corr_fid;
+				m_output.Rrc.addrreg.pid             = m_parent.GetProcessor().GetPID()+1-(m_parent.GetProcessor().GetPID()%2)*2;
 				m_output.Rrc.addrreg.tid             = thread.mtid;
 				m_output.Rrc.addrreg.index           = reg;
 				
@@ -373,7 +373,9 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecSync(cons
 //FT-BEGIN
 Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecPend()
 {
-    m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
+	const Family& family = m_familyTable[m_input.fid];
+	if (!family.redundant)
+		m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
     return PIPE_CONTINUE;
 }
 //FT-END

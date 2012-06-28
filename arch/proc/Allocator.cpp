@@ -864,7 +864,8 @@ Result Processor::Allocator::DoThreadAllocate()
 				
 				RemoteMessage msg;
 				msg.type                   = RemoteMessage::MSG_MASTERTID;
-				msg.mtid.fid               = family.corr_fid;
+				msg.mtid.pid               = m_parent.GetPID()+1-(m_parent.GetPID()%2)*2;
+				msg.mtid.lfid              = family.corr_fid;
 				msg.mtid.tid               = tid;
 				msg.mtid.index             = family.start;
 				
@@ -879,7 +880,8 @@ Result Processor::Allocator::DoThreadAllocate()
 		{//send message to make 'threadCount' in master family increment 
 			RemoteMessage msg;
             msg.type                   = RemoteMessage::MSG_THREADCOUNT;
-            msg.tc.fid                 = family.corr_fid;
+			msg.tc.pid                 = m_parent.GetPID()+1-(m_parent.GetPID()%2)*2;
+            msg.tc.lfid                = family.corr_fid;
             
             if (!m_network.SendMessage(msg))
             {
@@ -1009,7 +1011,8 @@ Result Processor::Allocator::DoThreadAllocate()
 					
 					RemoteMessage msg;
 					msg.type                   = RemoteMessage::MSG_MASTERTID;
-					msg.mtid.fid               = family.corr_fid;
+					msg.mtid.pid               = m_parent.GetPID()+1-(m_parent.GetPID()%2)*2;
+					msg.mtid.lfid              = family.corr_fid;
 					msg.mtid.tid               = tid;
 					msg.mtid.index             = family.start;
 					
@@ -1024,7 +1027,8 @@ Result Processor::Allocator::DoThreadAllocate()
 			{//send message to make 'threadCount' in master family increment 
 				RemoteMessage msg;
 				msg.type                   = RemoteMessage::MSG_THREADCOUNT;
-				msg.tc.fid                 = family.corr_fid;
+				msg.tc.pid                 = m_parent.GetPID()+1-(m_parent.GetPID()%2)*2;
+				msg.tc.lfid                = family.corr_fid;
 				
 				if (!m_network.SendMessage(msg))
 				{
