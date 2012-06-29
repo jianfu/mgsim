@@ -2161,6 +2161,11 @@ void Processor::Allocator::AllocateInitialFamily(MemAddr pc, bool legacy, PSize 
     family.pc            = pc;
     family.state         = FST_ACTIVE;
     family.start         = startIndex;
+	//FT-BEGIN
+	family.redundant     = m_parent.GetPID();
+	family.corr_fid      = 0;
+	//FT-END
+	
 
     for (size_t i = 0; i < NUM_REG_TYPES; i++)
     {
