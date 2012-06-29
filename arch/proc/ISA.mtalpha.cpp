@@ -1132,7 +1132,6 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                 case A_UTHREAD_DETACH:   return ExecDetach(fid); 
 				
 				//FT-BEGIN
-				case A_UTHREAD_PEND:     return ExecPend();
 				case A_UTHREAD_PAIR:     return ExecPair(fid, rfid, m_input.Rc.index);
 				case A_UTHREAD_RMTWR:    return ExecRmtwr(fid);
 				//FT-END

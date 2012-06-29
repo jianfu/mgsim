@@ -371,14 +371,6 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecSync(cons
 }
 
 //FT-BEGIN
-Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecPend()
-{
-	const Family& family = m_familyTable[m_input.fid];
-	if (!family.redundant)
-		m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
-    return PIPE_CONTINUE;
-}
-
 Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecRmtwr(const FID& fid)
 {
 	const Family& family = m_familyTable[m_input.fid];

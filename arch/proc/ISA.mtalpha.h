@@ -163,11 +163,8 @@ enum {
     A_UTHREADF_GETG      = 0x032,
     A_UTHREAD_GETS       = 0x33,
     A_UTHREADF_GETS      = 0x033,
-	
-	//FT-BEGIN
-	A_UTHREAD_PEND       = 0x34,
-	//FT-END
 
+	
     /* remote, res mgt. */
     A_UTHREAD_ALLOC_MASK  = 0x60,
     A_UTHREAD_ALLOC_VALUE = 0x40,
