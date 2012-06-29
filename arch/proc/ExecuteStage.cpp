@@ -379,6 +379,24 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecPend()
     return PIPE_CONTINUE;
 }
 
+Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecRmtwr(const FID& fid)
+{
+	const Family& family = m_familyTable[m_input.fid];
+	const Thread& thread = m_threadTable[m_input.tid];
+	
+	if (!family.redundant) //master thread
+	COMMIT
+		{
+			m_output.Rrc.type = RemoteMessage::MSG_RAW_REGISTER;
+			m_output.Rrc.rawreg.pid               = m_parent.GetProcessor().GetPID()+1-(m_parent.GetProcessor().GetPID()%2)*2;
+			m_output.Rrc.rawreg.addr              = MAKE_REGADDR(RT_INTEGER, thread.regIndex);
+			m_output.Rrc.rawreg.value.m_state     = RST_FULL;
+			m_output.Rrc.rawreg.value.m_integer   = m_parent.PackFID(fid);
+			
+		}
+    return PIPE_CONTINUE;
+}
+
 Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecPair(const FID& mfid, const FID& rfid, RegIndex reg)
 {
 	const Family& family = m_familyTable[m_input.fid];
