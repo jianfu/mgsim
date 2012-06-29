@@ -23,6 +23,9 @@ namespace Simulator
         const std::vector<std::pair<RegAddr, RegValue> >& m_regs;
         const std::vector<std::pair<RegAddr, std::string> >& m_loads;
         Processor* m_cpu;
+		//FT-BEGIN
+		Processor* m_cpu1;
+		//FT-END
 
         ActiveROM* m_rom;
         IODeviceID m_romid;

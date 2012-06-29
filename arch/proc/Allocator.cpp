@@ -704,7 +704,7 @@ FCapability Processor::Allocator::InitializeFamily(LFID fid) const
 		
 		//FT-BEGIN
 		family.redundant     = false;
-		family.corr_fid      = INVALID_LFID
+		family.corr_fid      = INVALID_LFID;
 		family.threadCount   = 0;
 		//FT-END
 		
@@ -1481,6 +1481,22 @@ bool Processor::Allocator::QueueCreate(const LinkMessage& msg)
     }
     return true;
 }
+
+//FT-BEGIN
+bool Processor::Allocator::SetRegIndex(TID tid, RegIndex index)
+{
+	if (tid == INVALID_TID)
+		return false;
+	else
+	COMMIT
+	{
+		Thread& thread  = m_threadTable[tid];
+		thread.regIndex = index;
+	}
+	return true;
+	
+}
+//FT-END
 
 // For delegate/local create
 bool Processor::Allocator::QueueCreate(const RemoteMessage& msg, PID src)

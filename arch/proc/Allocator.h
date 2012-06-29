@@ -129,7 +129,8 @@ public:
     TID PopActiveThread();
     
 	//FT-BEGIN
-	bool FindReadyThread(LFID fid, TID mtid, uint64_t index)
+	bool FindReadyThread(LFID fid, TID mtid, uint64_t index);
+	bool SetRegIndex(TID tid, RegIndex index);
 	//FT-END
 	
     // Helpers
