@@ -389,19 +389,21 @@ private:
     RegisterFile&                  m_regFile;
     FamilyTable&                   m_familyTable;
     Allocator&                     m_allocator;
-    
+	
+	Network*                       m_prev;
+    Network*                       m_next;
+	
     const std::vector<Processor*>& m_grid;
     unsigned int                   m_loadBalanceThreshold;
 
 public:
-    // Delegation network
+	// Delegation network
     Register<DelegateMessage>   m_delegateOut;    ///< Outgoing delegation messages
     Register<DelegateMessage, CyclicArbitratedPort>   m_delegateIn;     ///< Incoming delegation messages
     RegisterPair<LinkMessage>   m_link;           ///< Forward link through the cores
     RegisterPair<AllocResponse> m_allocResponse;  ///< Backward link for allocation unroll/commit
-    
-	Network*                       m_prev;
-    Network*                       m_next;
+
+
 	
 	//FT-BEGIN
 	RegisterPair<LinkMessage>   m_rlink;           
@@ -418,12 +420,14 @@ public:
     Process p_DelegationIn;
     Process p_Link;
     Process p_AllocResponse;
-    Process p_Syncs;
+   
 	
 	//FT-BEGIN
 	Process p_rLink;
     Process p_rAllocResponse;
 	//FT-END
+	
+	 Process p_Syncs;
 	
 };
 

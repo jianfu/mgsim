@@ -132,7 +132,7 @@ bool Processor::Network::SendMessage(const RemoteMessage& msg)
 	case RemoteMessage::MSG_ADDR_REGISTER: dmsg.dest = msg.addrreg.pid; break;
 	case RemoteMessage::MSG_THREADCOUNT:   dmsg.dest = msg.tc.pid; break;
 	case RemoteMessage::MSG_MASTERTID:     dmsg.dest = msg.mtid.pid; break;
-	case RemoteMessage::MSG_PAIR:          dmsg.dest = msg.mfid.pid; break;
+	case RemoteMessage::MSG_PAIR:          dmsg.dest = msg.pair.mfid.pid; break;
 	//FT-END
     default:                              dmsg.dest = INVALID_PID; break;
     }
@@ -882,10 +882,10 @@ Result Processor::Network::DoDelegationIn()
     
 	//FT-BEGIN
 	case DelegateMessage::MSG_ADDR_REGISTER:
-	COMMIT
+		if (!m_allocator.SetRegIndex(msg.addrreg.tid, msg.addrreg.index))
 		{
-			Thread& thread = m_threadTable[msg.addrreg.tid];
-			thread.regIndex = msg.addrreg.index;
+			DeadlockWrite("Unable to set the reg index.");
+			return FAILED;
 		}
 	break;
 	
@@ -904,7 +904,7 @@ Result Processor::Network::DoDelegationIn()
 	
 	case DelegateMessage::MSG_PAIR:
 		{	//the first core
-			const Family& family = m_allocator.GetFamilyChecked(msg.pair.mfid.lfid, msg.pair.mfid.capability);
+			Family& family = m_allocator.GetFamilyChecked(msg.pair.mfid.lfid, msg.pair.mfid.capability);
 			
 			COMMIT{family.corr_fid = msg.pair.rfid.lfid;}
 			
@@ -915,7 +915,7 @@ Result Processor::Network::DoDelegationIn()
 				response.rawreg.pid                  = msg.pair.completion_pid;
 				response.rawreg.addr                 = MAKE_REGADDR(RT_INTEGER, msg.pair.completion_reg);
 				response.rawreg.value.m_state        = RST_FULL;
-				response.rawreg.value.m_integer      = m_parent.PackFID(mfid);
+				response.rawreg.value.m_integer      = m_parent.PackFID(msg.pair.mfid);
 				
 				if (!SendMessage(response))
 				{
@@ -926,12 +926,12 @@ Result Processor::Network::DoDelegationIn()
 			else //send link message to next core
 			{
 				LinkMessage fwd;
-                fwd.type                  = LinkMessage::MSG_PAIR
+                fwd.type                  = LinkMessage::MSG_PAIR;
                 fwd.pair.mlfid            = family.link;
                 fwd.pair.rlfid            = msg.pair.rfid.lfid;
                 fwd.pair.completion_pid   = msg.pair.completion_pid;
 				fwd.pair.completion_reg   = msg.pair.completion_reg;
-				fwd.pair.first_fid        = m_parent.PackFID(mfid);
+				fwd.pair.first_fid        = m_parent.PackFID(msg.pair.mfid);
 		
 				fwd.redundant    = family.redundant;
 				
@@ -1164,7 +1164,7 @@ Result Processor::Network::DoLink()
             else //send link message to next core
             {
                 LinkMessage fwd;
-                fwd.type                  = LinkMessage::MSG_PAIR
+                fwd.type                  = LinkMessage::MSG_PAIR;
 				fwd.pair.mlfid            = family.link;
                 fwd.pair.rlfid            = family.corr_fid;
                 fwd.pair.completion_pid   = msg.pair.completion_pid;
@@ -1406,7 +1406,7 @@ Result Processor::Network::DorLink()
 								else //send link message to next core
 								{
 									LinkMessage fwd;
-									fwd.type                  = LinkMessage::MSG_PAIR
+									fwd.type                  = LinkMessage::MSG_PAIR;
 									fwd.pair.mlfid            = family.link;
 									fwd.pair.rlfid            = family.corr_fid;
 									fwd.pair.completion_pid   = msg.pair.completion_pid;

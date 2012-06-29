@@ -147,7 +147,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecBundle(Me
 }
 
 //FT-BEGIN
-Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecAllocate(PlaceID place, RegIndex reg, bool suspend, bool exclusive, bool redundnat, Integer flags)
+Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecAllocate(PlaceID place, RegIndex reg, bool suspend, bool exclusive, bool redundant, Integer flags)
 {
     if (place.size == 0)
     {
@@ -383,7 +383,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecRmtwr(con
 			m_output.Rrc.rawreg.pid               = m_parent.GetProcessor().GetPID()+1-(m_parent.GetProcessor().GetPID()%2)*2;
 			m_output.Rrc.rawreg.addr              = MAKE_REGADDR(RT_INTEGER, thread.regIndex);
 			m_output.Rrc.rawreg.value.m_state     = RST_FULL;
-			m_output.Rrc.rawreg.value.m_integer   = m_parent.PackFID(fid);
+			m_output.Rrc.rawreg.value.m_integer   = m_parent.GetProcessor().PackFID(fid);
 			
 		}
     return PIPE_CONTINUE;
