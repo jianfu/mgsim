@@ -131,7 +131,8 @@ bool Processor::Network::SendMessage(const RemoteMessage& msg)
 	//FT-BEGIN
 	case RemoteMessage::MSG_ADDR_REGISTER: dmsg.dest = msg.addrreg.pid; break;
 	case RemoteMessage::MSG_THREADCOUNT:   dmsg.dest = msg.tc.pid; break;
-	case RemoteMessage::MSG_MASTERTID:   dmsg.dest = msg.mtid.pid; break;
+	case RemoteMessage::MSG_MASTERTID:     dmsg.dest = msg.mtid.pid; break;
+	case RemoteMessage::MSG_PAIR:          dmsg.dest = msg.mfid.pid; break;
 	//FT-END
     default:                              dmsg.dest = INVALID_PID; break;
     }
@@ -897,9 +898,50 @@ Result Processor::Network::DoDelegationIn()
 	break;
 	
 	case DelegateMessage::MSG_MASTERTID:
-		{
-			if(!m_allocator.FindReadyThread(msg.mtid.lfid, msg.mtid.tid, msg.mtid.index))
-				return FAILED;
+		if(!m_allocator.FindReadyThread(msg.mtid.lfid, msg.mtid.tid, msg.mtid.index))
+			return FAILED;
+	break;
+	
+	case DelegateMessage::MSG_PAIR:
+		{	//the first core
+			const Family& family = m_allocator.GetFamilyChecked(msg.pair.mfid.lfid, msg.pair.mfid.capability);
+			
+			COMMIT{family.corr_fid = msg.pair.rfid.lfid;}
+			
+			if(family.link == INVALID_LFID) //the last core
+			{
+				RemoteMessage response;
+				response.type                        = RemoteMessage::MSG_RAW_REGISTER;
+				response.rawreg.pid                  = msg.pair.completion_pid;
+				response.rawreg.addr                 = MAKE_REGADDR(RT_INTEGER, msg.pair.completion_reg);
+				response.rawreg.value.m_state        = RST_FULL;
+				response.rawreg.value.m_integer      = m_parent.PackFID(mfid);
+				
+				if (!SendMessage(response))
+				{
+					DeadlockWrite("Unable to buffer outgoing remote register response, RMT_MSG_PAIR");
+					return FAILED;
+				}
+			}
+			else //send link message to next core
+			{
+				LinkMessage fwd;
+                fwd.type                  = LinkMessage::MSG_PAIR
+                fwd.pair.mlfid            = family.link;
+                fwd.pair.rlfid            = msg.pair.rfid.lfid;
+                fwd.pair.completion_pid   = msg.pair.completion_pid;
+				fwd.pair.completion_reg   = msg.pair.completion_reg;
+				fwd.pair.first_fid        = m_parent.PackFID(mfid);
+		
+				fwd.redundant    = family.redundant;
+				
+				if (!SendMessage(fwd))
+				{
+					DeadlockWrite("Unable to send link message, RMT_MSG_PAIR");
+					return FAILED;
+				}
+			}
+		
 		}
 	break;
 	//FT-END
@@ -1095,6 +1137,54 @@ Result Processor::Network::DoLink()
             return FAILED;
         }
         break;
+		
+	//FT-BEGIN
+	case LinkMessage::MSG_PAIR:
+		{
+			Family& family  = m_familyTable[msg.pair.mlfid];
+			Family& rfamily = m_familyTable[msg.pair.rlfid];
+			
+			COMMIT{family.corr_fid = rfamily.link;}
+			
+			if(family.link == INVALID_LFID) //the last core
+            {
+                RemoteMessage response;
+                response.type                        = RemoteMessage::MSG_RAW_REGISTER;
+                response.rawreg.pid                  = msg.pair.completion_pid;
+                response.rawreg.addr                 = MAKE_REGADDR(RT_INTEGER, msg.pair.completion_reg);
+                response.rawreg.value.m_state        = RST_FULL;
+                response.rawreg.value.m_integer      = msg.pair.first_fid;
+                
+                if (!SendMessage(response))
+                {
+                    DeadlockWrite("Unable to buffer outgoing remote register response, LINK_MSG_PAIR");
+                    return FAILED;
+                }
+            }
+            else //send link message to next core
+            {
+                LinkMessage fwd;
+                fwd.type                  = LinkMessage::MSG_PAIR
+				fwd.pair.mlfid            = family.link;
+                fwd.pair.rlfid            = family.corr_fid;
+                fwd.pair.completion_pid   = msg.pair.completion_pid;
+                fwd.pair.completion_reg   = msg.pair.completion_reg;
+				fwd.pair.first_fid        = msg.pair.first_fid;
+				
+                fwd.redundant    = msg.redundant;
+                
+                if (!SendMessage(fwd))
+                {
+                    DeadlockWrite("Unable to send link message, LINK_MSG_PAIR");
+                    return FAILED;
+                }
+            }
+			
+			
+
+		}
+		break;
+	//FT-END
 
     default:
         assert(false);
@@ -1288,6 +1378,52 @@ Result Processor::Network::DorLink()
 							if (!OnBreak(msg.brk.fid))
 							{
 								return FAILED;
+							}
+							break;
+							
+						case LinkMessage::MSG_PAIR:
+							{
+								Family& family  = m_familyTable[msg.pair.mlfid];
+								Family& rfamily = m_familyTable[msg.pair.rlfid];
+								
+								COMMIT{family.corr_fid = rfamily.link;}
+								
+								if(family.link == INVALID_LFID) //the last core
+								{
+									RemoteMessage response;
+									response.type                        = RemoteMessage::MSG_RAW_REGISTER;
+									response.rawreg.pid                  = msg.pair.completion_pid;
+									response.rawreg.addr                 = MAKE_REGADDR(RT_INTEGER, msg.pair.completion_reg);
+									response.rawreg.value.m_state        = RST_FULL;
+									response.rawreg.value.m_integer      = msg.pair.first_fid;
+									
+									if (!SendMessage(response))
+									{
+										DeadlockWrite("Unable to buffer outgoing remote register response, LINK_MSG_PAIR");
+										return FAILED;
+									}
+								}
+								else //send link message to next core
+								{
+									LinkMessage fwd;
+									fwd.type                  = LinkMessage::MSG_PAIR
+									fwd.pair.mlfid            = family.link;
+									fwd.pair.rlfid            = family.corr_fid;
+									fwd.pair.completion_pid   = msg.pair.completion_pid;
+									fwd.pair.completion_reg   = msg.pair.completion_reg;
+									fwd.pair.first_fid        = msg.pair.first_fid;
+									
+									fwd.redundant    = msg.redundant;
+									
+									if (!SendMessage(fwd))
+									{
+										DeadlockWrite("Unable to send link message, LINK_MSG_PAIR");
+										return FAILED;
+									}
+								}
+								
+								
+								
 							}
 							break;
 							

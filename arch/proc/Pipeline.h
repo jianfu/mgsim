@@ -348,6 +348,7 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
 		//FT-BEGIN
         PipeAction ExecAllocate(PlaceID place, RegIndex reg, bool suspend, bool exclusive, bool redundant, Integer flags);
         PipeAction ExecPend();
+		PipeAction ExecPair(const FID& fid, const FID& rfid, RegIndex reg);
 		//FT-END
 		PipeAction ExecCreate(const FID& fid, MemAddr address, RegIndex completion);
         PipeAction ExecBreak();

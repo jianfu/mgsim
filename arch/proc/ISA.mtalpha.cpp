@@ -271,7 +271,14 @@ void Processor::Pipeline::DecodeStage::DecodeInstruction(const Instruction& inst
                     m_output.regofs = Rb;
                     m_output.Rb     = INVALID_REG;
                     break;
-            
+				
+				//FT-BEGIN
+				//Pair reads from and writes to Ra
+				case A_UTHREAD_PAIR:
+					m_output.Rc = MAKE_REGADDR(RT_INTEGER, Ra);
+					break;
+				//FT-END
+					
                 default:
                     break;
                 }
@@ -1111,6 +1118,9 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
             else if ((m_input.function & A_UTHREAD_REMOTE_MASK) == A_UTHREAD_REMOTE_VALUE)
             {
                 const FID fid = m_parent.GetProcessor().UnpackFID(Rav);
+				//FT-BEGIN
+				const FID rfid = m_parent.GetProcessor().UnpackFID(Rbv);
+				//FT-END
                 switch (m_input.function)
                 {
                 case A_UTHREAD_SETSTART: return SetFamilyProperty(fid, FAMPROP_START, Rbv);
@@ -1123,6 +1133,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
 				
 				//FT-BEGIN
 				case A_UTHREAD_PEND:     return ExecPend();
+				case A_UTHREAD_PAIR:     return ExecPair(fid, rfid, m_input.Rc.index);
 				//FT-END
 
                 case A_UTHREAD_SYNC:     return ExecSync(fid);
