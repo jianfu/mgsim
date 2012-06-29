@@ -378,6 +378,42 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecPend()
 		m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
     return PIPE_CONTINUE;
 }
+
+Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecPair(const FID& mfid, const FID& rfid, RegIndex reg)
+{
+	const Family& family = m_familyTable[m_input.fid];
+	
+	//master thread
+	if(!family.redundant)
+	{
+		// Check these two FIDs
+		if ((mfid.pid == 0 && mfid.lfid == 0 && mfid.capability == 0) || (rfid.pid == 0 && rfid.lfid == 0 && rfid.capability == 0))
+		{
+			// We need to wait for the pending writes to complete
+			COMMIT
+			{
+				m_output.Rcv.m_integer = 0;
+				m_output.Rcv.m_state   = RST_FULL;
+			}
+		}
+		else
+		// Send the pair.
+		COMMIT
+		{
+			m_output.Rrc.type = RemoteMessage::MSG_PAIR;
+			m_output.Rrc.pair.mfid             = mfid;
+			m_output.Rrc.pair.rfid             = rfid;
+			m_output.Rrc.pair.completion_reg   = reg;
+			m_output.Rrc.pair.completion_pid   = m_parent.GetProcessor().GetPID();
+			
+			m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
+		}
+	}
+    
+    return PIPE_CONTINUE;
+}
+
+
 //FT-END
 
 Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecDetach(const FID& fid)

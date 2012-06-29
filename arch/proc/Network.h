@@ -23,6 +23,7 @@ struct RemoteMessage
 		MSG_ADDR_REGISTER,  ///< Abosolute register address in 'allocate' of redundant thread
 		MSG_THREADCOUNT,    ///< The distance of thread creation between master family and redundant family 
 		MSG_MASTERTID,      ///< The physic matching master tid for redundant thread
+		MSG_PAIR,           ///< Paring the master and redundant family
 		//FT-END
     };
         
@@ -116,6 +117,14 @@ struct RemoteMessage
 			TID			  tid;
 			uint64_t      index;
         } mtid;
+		
+		struct
+        {
+			FID          mfid;
+			FID	         rfid;
+			RegIndex     completion_reg;
+            PID          completion_pid;
+        } pair;
 		//FT-END
     };
 
@@ -135,6 +144,9 @@ struct LinkMessage
         MSG_DETACH,         ///< Detach family
         MSG_BREAK,          ///< Break
         MSG_GLOBAL,         ///< Global register data
+		//FT-BEGIN
+		MSG_PAIR,           ///< Paring the master and redundant family
+		//FT-END
     };
         
     Type type;      ///< Type of the message
@@ -210,6 +222,17 @@ struct LinkMessage
             RegAddr  addr;
             RegValue value;
         } global;
+		
+		//FT-BEGIN
+		struct
+        {
+            LFID         mlfid;
+            LFID         rlfid;
+			RegIndex     completion_reg;
+            PID          completion_pid;
+			Integer      first_fid;
+        } pair;
+		//FT-END
     };
 
     std::string str() const;
