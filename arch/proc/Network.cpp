@@ -1591,6 +1591,39 @@ string Processor::RemoteMessage::str() const
         }
         ss << "]";
         break;
+	case MSG_ADDR_REGISTER: 	
+		ss << "[addrregister"
+			<< " pid " << addrreg.pid
+			<< " tid " << addrreg.tid
+			<< " index " << addrreg.index
+			<< "]";
+		;
+        break;
+	case MSG_THREADCOUNT: 	
+		ss << "[tc"
+			<< " pid " << tc.pid
+			<< " lfid " << tc.lfid
+			<< "]";
+		;
+		break;
+	case MSG_MASTERTID: 	
+		ss << "[mtid"
+			<< " pid " << mtid.pid
+			<< " lfid " << mtid.lfid
+			<< " tid " << mtid.tid
+			<< " index " << mtid.index
+			<< "]";
+		;
+		break;
+	case MSG_PAIR: 	
+			ss << "[pair"
+				<< " mfid " << pair.mfid.str()
+				<< " rfid " << pair.rfid.str()
+				<< " reg " << pair.completion_reg
+				<< " pid " << pair.completion_pid
+				<< "]";
+			;
+			break;
     default:
         assert(false); // all types should be listed here.
     }
