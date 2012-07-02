@@ -856,7 +856,7 @@ Result Processor::Allocator::DoThreadAllocate()
 			if (family.threadCount == 0)
 			{
 				m_cleanup.Push(tid);
-				return SUCCESS;
+				return FAILED;
 			}
 			else
 			{
@@ -991,7 +991,10 @@ Result Processor::Allocator::DoThreadAllocate()
             
             // We have threads to run
             TID tid = m_threadTable.PopEmpty( exclusive ? CONTEXT_EXCLUSIVE : (reserved ? CONTEXT_RESERVED : CONTEXT_NORMAL) );
-            if (tid == INVALID_TID)
+            
+			DebugSimWrite("C%u   F%u   T%u \n", (unsigned)m_parent.GetPID(), (unsigned)fid, (unsigned)tid);
+            
+			if (tid == INVALID_TID)
             {
                 assert(!exclusive && !reserved);
                 DeadlockWrite("F%u unable to allocate a free thread entry", (unsigned)fid);
@@ -1004,7 +1007,7 @@ Result Processor::Allocator::DoThreadAllocate()
 			{	
 				//the mathing thread in redundant thread is not created
 				if (family.threadCount == 0)
-					return SUCCESS;
+					return FAILED;
 				else
 				{
 					family.threadCount--;
@@ -1929,7 +1932,7 @@ Result Processor::Allocator::DoThreadActivation()
 			m_readyThreads1.Push(tid);
 		else m_readyThreads2.Push(tid);
 		
-		return SUCCESS;
+		return FAILED;
 	}
 	//FT-END
 	

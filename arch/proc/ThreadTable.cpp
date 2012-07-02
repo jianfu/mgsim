@@ -211,8 +211,8 @@ void Processor::ThreadTable::Cmd_Read(ostream& out, const vector<string>& argume
     }
     else
     {
-        out << "    |         PC         | Fam | Index | Next | PC/K | State     | Symbol" << endl;
-        out << "----+--------------------+-----+-------+------+------+-----------+--------" << endl;
+        out << "    |         PC         | Fam | Index | Next | PC/K | State     | mtid   | Symbol" << endl;
+        out << "----+--------------------+-----+-------+------+------+-----------+--------+-----------" << endl;
         for (set<TID>::const_iterator p = tids.begin(); p != tids.end(); ++p)
         {
             out << right << dec << setw(3) << setfill(' ') << *p << " | ";
@@ -222,7 +222,7 @@ void Processor::ThreadTable::Cmd_Read(ostream& out, const vector<string>& argume
             {
                 out << setw(18) << setfill(' ') << hex << showbase << thread.pc << " | ";
                 out << "F" << setfill('0') << dec << noshowbase << setw(2) << thread.family << " | ";
-                out << setw(5) << dec << setfill(' ') << thread.index << " | ";
+                out << setw(11) << dec << setfill(' ') << thread.index << " | ";
                 if (thread.nextInBlock != INVALID_TID) out << dec << setw(4) << setfill(' ') << thread.nextInBlock; else out << "   -";
                 out << " | "
                     << (thread.dependencies.prevCleanedUp ? "PC" : " -")
@@ -231,11 +231,13 @@ void Processor::ThreadTable::Cmd_Read(ostream& out, const vector<string>& argume
                     << " | ";
 
                 out << left << setfill(' ') << setw(9) <<  ThreadStateNames[thread.state]
-                    << " | " << GetKernel()->GetSymbolTable()[thread.pc];
+					<< "|" << out << left << setw (6) << setfill(' ') << thread.mtid; 
+                    << " | " << setw (9) << GetKernel()->GetSymbolTable()[thread.pc];
+				
             }
             else
             {
-                out << "                   |     |       |      |      |           |";
+                out << "                   |     |       |      |      |           |        |";
             }
             out << endl;
         }

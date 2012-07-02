@@ -250,10 +250,10 @@ void Processor::Initialize(Processor* prev, Processor* next)
 
     m_allocator.p_ThreadAllocate.SetStorageTraces(
         /* THREADDEP_PREV_CLEANED_UP */ (opt(m_allocator.m_cleanup) * 
-        /* FAMDEP_THREAD_COUNT */        opt(m_network.m_link.out ^ m_network.m_rlink.out ^ m_network.m_syncs ^
+        /* FAMDEP_THREAD_COUNT */        opt(m_network.m_link.out ^ m_network.m_rlink.out ^ m_network.m_delegateOut ^ m_network.m_syncs ^
         /* AllocateThread */                 m_allocator.m_readyThreads2)) ^
-        /* FAMDEP_ALLOCATION_DONE */    (opt(m_network.m_link.out ^ m_network.m_rlink.out ^ m_network.m_syncs) *
-        /* AllocateThread */             opt(m_allocator.m_readyThreads2)) );
+        /* FAMDEP_ALLOCATION_DONE */    (opt(m_network.m_link.out ^ m_network.m_rlink.out ^ m_network.m_delegateOut ^ m_network.m_syncs) * 
+		                                 opt(m_allocator.m_readyThreads2)) );
 
     m_allocator.p_FamilyAllocate.SetStorageTraces(
         m_network.m_allocResponse.out ^ m_network.m_rallocResponse.out ^ m_allocator.m_creates ^ m_network.m_link.out ^ m_network.m_rlink.out ^ DELEGATE * opt(DELEGATE) );
