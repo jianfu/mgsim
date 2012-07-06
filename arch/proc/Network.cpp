@@ -130,7 +130,7 @@ bool Processor::Network::SendMessage(const RemoteMessage& msg)
     case RemoteMessage::MSG_BREAK:        dmsg.dest = msg.brk.pid; break;
 	//FT-BEGIN
 	case RemoteMessage::MSG_ADDR_REGISTER: dmsg.dest = msg.addrreg.pid; break;
-	case RemoteMessage::MSG_THREADCOUNT:   dmsg.dest = msg.tc.pid; break;
+	case RemoteMessage::MSG_RTHREADCOUNT:   dmsg.dest = msg.rtc.pid; break;
 	case RemoteMessage::MSG_MASTERTID:     dmsg.dest = msg.mtid.pid; break;
 	case RemoteMessage::MSG_PAIR:          dmsg.dest = msg.pair.mfid.pid; break;
 	//FT-END
@@ -889,11 +889,12 @@ Result Processor::Network::DoDelegationIn()
 		}
 	break;
 	
-	case DelegateMessage::MSG_THREADCOUNT:
-	COMMIT
+	case DelegateMessage::MSG_RTHREADCOUNT:
 		{
-			Family& family = m_familyTable[msg.tc.lfid];
-			family.threadCount++;
+			Family& family = m_familyTable[msg.rtc.lfid];
+			COMMIT{family.rthreadCount++;}
+			//printf("C%u, rtc: %u\n", (unsigned)m_parent.GetPID(), (unsigned)family.rthreadCount);
+			
 		}
 	break;
 	
@@ -1599,10 +1600,11 @@ string Processor::RemoteMessage::str() const
 			<< "]";
 		;
         break;
-	case MSG_THREADCOUNT: 	
-		ss << "[tc"
-			<< " pid " << tc.pid
-			<< " lfid " << tc.lfid
+	case MSG_RTHREADCOUNT: 	
+		ss << "[rtc"
+			<< " pid " << rtc.pid
+			<< " lfid " << rtc.lfid
+			<< " tid " << rtc.tid
 			<< "]";
 		;
 		break;
