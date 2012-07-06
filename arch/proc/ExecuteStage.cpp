@@ -215,6 +215,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecAllocate(
 		if (redundant) //allocate/r 
 			place.pid = place.pid+1-(place.pid%2)*2;
 		
+		//printf("Master: C%u, F%u, T%u, R%u\n", (unsigned)m_parent.GetProcessor().GetPID(), (unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned)redundant);
 		//both allocate/r and allocate
 		COMMIT
 		{
@@ -244,6 +245,8 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecAllocate(
 				
 				m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
 			}
+			//printf("Redundant: C%u, F%u, T%u, R%u\n", (unsigned)m_parent.GetProcessor().GetPID(), (unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned)redundant);
+			
 		//nop for allocate/r
 	}
 	//FT-END
