@@ -33,7 +33,6 @@ Processor::Network::Network(
     m_grid(grid),
     
     m_loadBalanceThreshold(config.getValue<unsigned>(*this, "LoadBalanceThreshold")),
-
 #define CONSTRUCT_REGISTER(name) name(*this, #name)
     CONSTRUCT_REGISTER(m_delegateOut),
     CONSTRUCT_REGISTER(m_delegateIn),
@@ -70,7 +69,7 @@ Processor::Network::Network(
     m_allocResponse.in.Sensitive(p_AllocResponse);
 }
 
-void Processor::Network::Initialize(Network* prev, Network* next)
+void Processor::Network::Initialize(Network* prev3, Network* prev2, Network* prev, Network* next, Network* next2, Network* next3)
 {
     m_prev = prev;
     m_next = next;
@@ -83,19 +82,19 @@ void Processor::Network::Initialize(Network* prev, Network* next)
 	if (next == NULL){   //the last core in regular network
 		INITIALIZE(m_rlink, prev);   
 	}
-	else if (next->m_next != NULL){  //! the core before last core
+	else if (next2 != NULL){  //! the core before last core
 		if (m_parent.GetPID()%2)  //odd core
 			INITIALIZE(m_rlink, prev);
 		else                      //even core
-			INITIALIZE(m_rlink, next->m_next->m_next);
+			INITIALIZE(m_rlink, next3);
 	}
 	
 	if (prev == NULL){ //core 0
 		INITIALIZE(m_rallocResponse, next);
 	}
-	else if (prev->m_prev != NULL){  //!core 1
+	else if (prev2 != NULL){  //!core 1
 		if (m_parent.GetPID()%2)
-			INITIALIZE(m_rallocResponse, prev->m_prev->m_prev);
+			INITIALIZE(m_rallocResponse, prev3);
 		else
 			INITIALIZE(m_rallocResponse, next);
 	}
@@ -178,7 +177,7 @@ bool Processor::Network::SendMessage(const RemoteMessage& msg)
 
 bool Processor::Network::SendMessage(const LinkMessage& msg)
 {
-    assert(m_next != NULL);
+    //assert(m_next != NULL);
 	
 	//FT-BEGIN
 	if (msg.redundant)
@@ -188,14 +187,17 @@ bool Processor::Network::SendMessage(const LinkMessage& msg)
 			DeadlockWrite("Unable to buffer rlink message: %s", msg.str().c_str());
 			return false;
 		}
+		DebugNetWrite("sent rlink message %s", msg.str().c_str());
 	}
 	//FT-END
-	else if (!m_link.out.Write(msg))
-    {
-        DeadlockWrite("Unable to buffer link message: %s", msg.str().c_str());
-        return false;
-    }
-    DebugNetWrite("sent link message %s", msg.str().c_str());
+	else 
+	{	if (!m_link.out.Write(msg))
+		{
+			DeadlockWrite("Unable to buffer link message: %s", msg.str().c_str());
+			return false;
+		}
+		DebugNetWrite("sent link message %s", msg.str().c_str());
+	}
     return true;
 }
 
@@ -208,6 +210,8 @@ bool Processor::Network::SendAllocResponse(const AllocResponse& msg)
 		{
 			return false;
 		}
+		DebugSimWrite("sent rallocResponse message to CPU%u/R%04x", 
+                       (unsigned)msg.completion_pid, (unsigned)msg.completion_reg);
 	}
 	//FT-END
 	else if (!m_allocResponse.out.Write(msg))
@@ -362,6 +366,7 @@ Result Processor::Network::DoAllocResponse()
 //FT-BEGIN
 Result Processor::Network::DorAllocResponse()
 {
+	
     assert(!m_rallocResponse.in.Empty());
     AllocResponse msg = m_rallocResponse.in.Read();
     
@@ -439,10 +444,15 @@ Result Processor::Network::DorAllocResponse()
         }
     }
     // Forward response
-    else if (m_rallocResponse.out.Write(msg))
+    else if (!m_rallocResponse.out.Write(msg))
     {
         return FAILED;
     }
+	
+	DebugSimWrite("F%u backward allocation response to CPU%u/F%u, ralloc", 
+                  (unsigned)lfid, (unsigned)(m_parent.GetPID() - 1), (unsigned)msg.prev_fid);
+
+	
     m_rallocResponse.in.Clear();
     return SUCCESS;
 }
@@ -1495,6 +1505,28 @@ void Processor::Network::Cmd_Read(ostream& out, const vector<string>& /* argumen
         out << endl;
     }
     
+	const struct {
+        const char*                  name;
+        const Register<LinkMessage>& reg;
+    } rLinkRegisters[2] = {
+        {"Incoming", m_rlink.in},
+        {"Outgoing", m_rlink.out}
+    };
+    
+    for (size_t i = 0; i < 2; ++i)
+    {
+        out << rLinkRegisters[i].name << " rlink:" << endl;
+        out << dec;
+        if (!rLinkRegisters[i].reg.Empty()) {
+            const LinkMessage& msg = rLinkRegisters[i].reg.Read();
+            out << msg.str();
+        } else {
+            out << "Empty";
+        }
+        out << endl;
+    }
+    
+	
     out << "Family events:" << dec << endl;
     for (Buffer<SyncInfo>::const_iterator p = m_syncs.begin(); p != m_syncs.end(); ++p)
     {
