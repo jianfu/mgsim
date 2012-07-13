@@ -36,7 +36,7 @@ public:
     Processor(const std::string& name, Object& parent, Clock& clock, PID pid, const std::vector<Processor*>& grid, IMemory& memory, IMemoryAdmin& admin, FPU& fpu, IIOBus *iobus, Config& config);
     ~Processor();
     
-    void Initialize(Processor* prev, Processor* next);
+    void Initialize(Processor* prev3, Processor* prev2, Processor* prev, Processor* next, Processor* next2, Processor* next3);
     void Boot(MemAddr runAddress, bool legacy, PSize placeSize, SInteger startIndex);
 
     PID   GetPID()      const { return m_pid; }

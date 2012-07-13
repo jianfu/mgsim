@@ -845,13 +845,23 @@ MGSystem::MGSystem(Config& config,
     // Connect processors in the link
     for (size_t i = 0; i < numProcessors; ++i)
     {
-        Processor* prev = (i == 0)                 ? NULL : m_procs[i - 1];
-        Processor* next = (i == numProcessors - 1) ? NULL : m_procs[i + 1];
-        m_procs[i]->Initialize(prev, next);
+        Processor* prev  = (i == 0)                 ? NULL : m_procs[i - 1];
+        Processor* next  = (i == numProcessors - 1) ? NULL : m_procs[i + 1];
+		
+		//FT-BEGIN
+		Processor* prev2 = (i <= 1 )                ? NULL : m_procs[i - 2];
+        Processor* next2 = (i >= numProcessors - 2) ? NULL : m_procs[i + 2];
+		
+		Processor* prev3 = (i <= 2)                 ? NULL : m_procs[i - 3];
+        Processor* next3 = (i >= numProcessors - 3) ? NULL : m_procs[i + 3];
+		//FT-END
+		
+        m_procs[i]->Initialize(prev3, prev2, prev, next, next2, next3);
         if (next)
             config.registerRelation(*m_procs[i], *next, "link", true);
     }
-
+    
+	
     // Initialize the buses. This initializes the devices as well.
     for (size_t i = 0; i < m_iobuses.size(); ++i)
     {

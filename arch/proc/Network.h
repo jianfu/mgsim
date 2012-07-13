@@ -352,7 +352,7 @@ public:
     };
     
     Network(const std::string& name, Processor& parent, Clock& clock, const std::vector<Processor*>& grid, Allocator& allocator, RegisterFile& regFile, FamilyTable& familyTable, Config& config);
-    void Initialize(Network* prev, Network* next);
+    void Initialize(Network* prev3, Network* prev2, Network* prev, Network* next, Network* next2, Network* next3);
 
     bool SendMessage(const RemoteMessage& msg);
     bool SendMessage(const LinkMessage& msg);

@@ -923,7 +923,6 @@ Result Processor::Allocator::DoThreadAllocate()
 				else
 				{
 					COMMIT {family.rthreadCount--;}
-					//printf("C%u: The mtid msg was send from m_cleanup.\n", (unsigned)m_parent.GetPID());
 					
 					RemoteMessage msg;
 					msg.type                   = RemoteMessage::MSG_MASTERTID;
@@ -941,7 +940,6 @@ Result Processor::Allocator::DoThreadAllocate()
 			}
 			else //redundant family
 			{//send message to make 'threadCount' in master family increment 
-				//printf("C%u: The rtc msg was send from m_cleanup.\n", (unsigned)m_parent.GetPID());
 				RemoteMessage msg;
 				msg.type                   = RemoteMessage::MSG_RTHREADCOUNT;
 				msg.rtc.pid                = m_parent.GetPID()+1-(m_parent.GetPID()%2)*2;
@@ -974,8 +972,7 @@ Result Processor::Allocator::DoThreadAllocate()
         LFID    fid    = m_alloc.Front();
         Family& family = m_familyTable[fid];
 	
-		//printf("BS: %u\n", (unsigned)family.physBlockSize);
-		
+			
         // Check if we're done with the initial allocation of this family
         if (family.dependencies.numThreadsAllocated == family.physBlockSize || family.dependencies.allocationDone)
         {
@@ -1045,7 +1042,6 @@ Result Processor::Allocator::DoThreadAllocate()
 				}
 				
 				COMMIT { family.rthreadCount--; }
-				//printf("C%u, rtc: %u\n", (unsigned)m_parent.GetPID(), (unsigned)family.rthreadCount);
 				
 			}
 			else //redundant family
