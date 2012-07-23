@@ -327,6 +327,7 @@ bool Processor::Allocator::AllocateThread(LFID fid, TID tid, bool isNewlyAllocat
 	//FT-BEGIN
 	thread->mtid             = INVALID_TID;
 	thread->regIndex         = INVALID_REG_INDEX;
+	thread->cleanupFlag      = 0;
 	//FT-END
 
     // Initialize dependencies
@@ -627,10 +628,12 @@ bool Processor::Allocator::DecreaseThreadDependency(TID tid, ThreadDependency de
         if (deps->numPendingWrites == 0 && deps->prevCleanedUp && deps->killed)
         {
             // This thread can be cleaned up, push it on the cleanup queue
-            if (!m_cleanup.Push(tid))
+			if (!m_cleanup.Push(tid))
             {
                 return false;
             }
+			else
+				COMMIT{ thread.cleanupFlag = 0; }
             break;
         }
     }
@@ -847,47 +850,53 @@ Result Processor::Allocator::DoThreadAllocate()
         m_cleanup.Pop();
 
         assert(thread.state == TST_TERMINATED);
-		
-		
-        // Clear the thread's dependents, if any
-        for (size_t i = 0; i < NUM_REG_TYPES; i++)
-        {
-            if (family.regs[i].count.shareds > 0)
-            {
-                if (!m_registerFile.Clear(MAKE_REGADDR((RegType)i, thread.regs[i].dependents), family.regs[i].count.shareds))
-                {
-                    DeadlockWrite("F%u/T%u(%llu) unable to clear the dependent registers",
-                                  (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
-                    return FAILED;
-                }
-            }
-        }
 
-        if (family.hasShareds && family.physBlockSize > 1)
-        {
-            // Mark 'previous thread cleaned up' on the next thread
-            if (thread.nextInBlock == INVALID_TID)
-            {
-                COMMIT{ family.prevCleanedUp = true; }
-                DebugSimWrite("F%u/T%u(%llu) marking PREV_CLEANED_UP on family (no next thread)", 
-                              (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
-            }
-            else if (!DecreaseThreadDependency(thread.nextInBlock, THREADDEP_PREV_CLEANED_UP))
-            {
-                DeadlockWrite("F%u/T%u(%llu) marking PREV_CLEANED_UP on next T%u",
-                              (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index,
-                              (unsigned)thread.nextInBlock);
-                return FAILED;
-            }
-        }
-        
-        COMMIT
-        {
+		DebugSimWrite("F%u/T%u(%llu) is popped",
+					  (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
+
+		
+		if(!thread.cleanupFlag)
+		{
+        // Clear the thread's dependents, if any
+			for (size_t i = 0; i < NUM_REG_TYPES; i++)
+			{
+				if (family.regs[i].count.shareds > 0)
+				{
+					if (!m_registerFile.Clear(MAKE_REGADDR((RegType)i, thread.regs[i].dependents), family.regs[i].count.shareds))
+					{
+						DeadlockWrite("F%u/T%u(%llu) unable to clear the dependent registers",
+									  (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
+						return FAILED;
+					}
+				}
+			}
+
+			if (family.hasShareds && family.physBlockSize > 1)
+			{
+				// Mark 'previous thread cleaned up' on the next thread
+				if (thread.nextInBlock == INVALID_TID)
+				{
+					COMMIT{ family.prevCleanedUp = true; }
+					DebugSimWrite("F%u/T%u(%llu) marking PREV_CLEANED_UP on family (no next thread)", 
+								  (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
+				}
+				else if (!DecreaseThreadDependency(thread.nextInBlock, THREADDEP_PREV_CLEANED_UP))
+				{
+					DeadlockWrite("F%u/T%u(%llu) marking PREV_CLEANED_UP on next T%u",
+								  (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index,
+								  (unsigned)thread.nextInBlock);
+					return FAILED;
+				}
+			}
+			
+			COMMIT
+			{
             // Unreserve the TLS memory
             const MemAddr tls_base = m_parent.GetTLSAddress(fid, tid);
             const MemSize tls_size = m_parent.GetTLSSize();
             m_parent.UnmapMemory(tls_base+tls_size/2, tls_size/2);
         }
+		}
 		
         if (family.dependencies.allocationDone)
         {
@@ -916,12 +925,28 @@ Result Processor::Allocator::DoThreadAllocate()
 				//the mathing thread in redundant thread is not created
 				if (family.rthreadCount == 0)
 				{
-					m_cleanup.Push(tid);
-					return SUCCESS;
+					if(m_cleanup.Push(tid))
+					{
+						COMMIT{	thread.cleanupFlag = 1; }
+						DebugSimWrite("F%u/T%u(%llu) is pushed in to m_cleanup again",
+									  (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
+						return SUCCESS;
+					}
+					else
+					{
+						DebugSimWrite("F%u/T%u(%llu) can not be pushed in to m_cleanup again",
+									  (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
+						return FAILED;
+					}
+					
 				}
 				else
 				{
-					COMMIT {family.rthreadCount--;}
+					COMMIT 
+					{
+						family.rthreadCount--;
+						thread.cleanupFlag = 0; 
+					}
 					
 					RemoteMessage msg;
 					msg.type                   = RemoteMessage::MSG_MASTERTID;
@@ -953,6 +978,7 @@ Result Processor::Allocator::DoThreadAllocate()
 				
 			}	
 			//FT-END
+			
 			
 			if (!AllocateThread(fid, tid, false))
 			{
@@ -1070,6 +1096,7 @@ Result Processor::Allocator::DoThreadAllocate()
 }
 
 
+	
 bool Processor::Allocator::QueueBundle(const MemAddr addr, Integer parameter, RegIndex completion_reg)
 {
     BundleInfo info;

@@ -625,7 +625,7 @@ bool Processor::Network::OnDetach(LFID fid)
 bool Processor::Network::OnBreak(LFID fid)
 {
     Family& family = m_familyTable[fid];
-
+	
     if (!family.dependencies.allocationDone)
     {
         if (!m_allocator.DecreaseFamilyDependency(fid, FAMDEP_ALLOCATION_DONE))
@@ -1750,6 +1750,15 @@ string Processor::LinkMessage::str() const
            << ']'
             ;
         break;
+	case MSG_PAIR:
+		ss << "[pair"
+		   << " mlfid " << pair.mlfid
+		   << " rlfid " << pair.rlfid
+		   << " cpid "  << pair.completion_pid
+		   << " creg "  << pair.completion_reg
+		   << " ffid "  << pair.first_fid
+		   << "]";
+	   break;
     default:
         assert(false); // all types should be listed here.
     }

@@ -431,6 +431,7 @@ unsigned int Processor::GetNumSuspendedRegisters() const
 
 void Processor::MapMemory(MemAddr address, MemSize size, ProcessID pid)
 {
+	DebugSimWrite("Reserving %zu bytes of memory at address %#016llx", (size_t)size, (unsigned long long)address);
     m_memadmin.Reserve(address, size, pid,
                        IMemory::PERM_READ | IMemory::PERM_WRITE | 
                        IMemory::PERM_DCA_READ | IMemory::PERM_DCA_WRITE);
@@ -439,13 +440,19 @@ void Processor::MapMemory(MemAddr address, MemSize size, ProcessID pid)
 void Processor::UnmapMemory(MemAddr address, MemSize size)
 {
     // TODO: possibly check the size matches the reserved size
-    m_memadmin.Unreserve(address, size);
+
+    DebugSimWrite("Unreserving %zu bytes of memory at address %#016llx", (size_t)size, (unsigned long long)address);
+
+	m_memadmin.Unreserve(address, size);
 }
 
 void Processor::UnmapMemory(ProcessID pid)
 {
-    // TODO: possibly check the size matches the reserved size
-    m_memadmin.UnreserveAll(pid);
+    
+	DebugSimWrite("Unreserving memory for process %u", (unsigned)pid);
+	
+	m_memadmin.UnreserveAll(pid);
+  
 }
 
 bool Processor::CheckPermissions(MemAddr address, MemSize size, int access) const
