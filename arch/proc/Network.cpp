@@ -633,6 +633,7 @@ bool Processor::Network::OnBreak(LFID fid)
             DeadlockWrite("F%u unable to mark ALLOCATION_DONE due to break", (unsigned)fid);
             return false;
         }
+		DebugSimWrite("F%u can not break twice", (unsigned)fid)
     }
     
     if (family.link != INVALID_LFID)
