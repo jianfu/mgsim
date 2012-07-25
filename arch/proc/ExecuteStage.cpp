@@ -402,7 +402,6 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecPair(cons
 		// Check these two FIDs
 		if ((mfid.pid == 0 && mfid.lfid == 0 && mfid.capability == 0) || (rfid.pid == 0 && rfid.lfid == 0 && rfid.capability == 0))
 		{
-			// We need to wait for the pending writes to complete
 			COMMIT
 			{
 				m_output.Rcv.m_integer = 0;

@@ -895,7 +895,7 @@ Result Processor::Allocator::DoThreadAllocate()
             const MemAddr tls_base = m_parent.GetTLSAddress(fid, tid);
             const MemSize tls_size = m_parent.GetTLSSize();
             m_parent.UnmapMemory(tls_base+tls_size/2, tls_size/2);
-        }
+			}
 		}
 		
         if (family.dependencies.allocationDone)
@@ -988,7 +988,7 @@ Result Processor::Allocator::DoThreadAllocate()
 			}
 		
 		}
-	return SUCCESS;
+		return SUCCESS;
     }
     
     assert (!m_alloc.Empty());
@@ -1288,6 +1288,17 @@ Result Processor::Allocator::DoFamilyAllocate()
         DeadlockWrite("Unable to allocate a free context");
         return FAILED;
     }
+	
+	if (lfid != INVALID_LFID)
+	{
+	      // We have the context
+		COMMIT
+		{
+			Family& family = m_familyTable[lfid];
+	        family.redundant = req.redundant;
+		}
+	}
+
     
     if ((lfid == INVALID_LFID) && (req.completion_reg != INVALID_REG_INDEX))
     {
@@ -1972,7 +1983,7 @@ Result Processor::Allocator::DoThreadActivation()
 	//FT-BEGIN
     Thread& thread = m_threadTable[tid];
 	Family& family = m_familyTable[thread.family];
-	if (family.redundant && thread.mtid == INVALID_TID)  //redundant family without mtid
+	if (family.redundant && thread.mtid == INVALID_TID && !family.broken)  //redundant family without mtid  //except "break"
 	{
 		DebugSimWrite("F%u T%u: Redundant thread activation failed.\n", (unsigned)thread.family, (unsigned)tid);
 		return SUCCESS;

@@ -192,8 +192,8 @@ void Processor::FamilyTable::Cmd_Read(ostream& out, const vector<string>& argume
     }
     else
     {
-        out << "    |     Initial PC     | Allocated | Threads | P/A/D/Rd |  Cores  | Link |    Sync    |     Capability     | State         |   Symbol  | redundant | rthreadCount | corr_fid" << endl;
-        out << "----+--------------------+-----------+---------+----------+---------+------+------------+--------------------+---------------+-----------+-----------+--------------+----------" << endl;
+        out << "    |     Initial PC     | Allocated | Threads | P/A/D/Rd |  Cores  | Link |    Sync    |     Capability     | State         |   Symbol  | redundant | rthreadCount | corr_fid | broken" << endl;
+        out << "----+--------------------+-----------+---------+----------+---------+------+------------+--------------------+---------------+-----------+-----------+--------------+----------+--------" << endl;
         for (set<LFID>::const_iterator p = fids.begin(); p != fids.end(); ++p)
         {
             const Family& family = m_families[*p];
@@ -201,7 +201,7 @@ void Processor::FamilyTable::Cmd_Read(ostream& out, const vector<string>& argume
             out << dec << right << setw(3) << setfill(' ') << *p << " | ";
             if (family.state == FST_EMPTY)
             {
-                out << "                   |           |         |          |         |      |            |                    |               |           |           |              |";
+                out << "                   |           |         |          |         |      |            |                    |               |           |           |              |          |";
             }
             else
             {
@@ -265,7 +265,8 @@ void Processor::FamilyTable::Cmd_Read(ostream& out, const vector<string>& argume
 				
 				out << left << setw (6) << setfill(' ') << family.redundant 
 					<< " | " << left << setw(12) << setfill(' ') << family.rthreadCount
-					<< " | " << left << setw(10) << setfill(' ') << family.corr_fid;
+					<< " | " << left << setw(10) << setfill(' ') << dec << (int)family.corr_fid
+					<< " | " << left << setw(8) << setfill(' ') << family.broken;
             }
             out << endl;
         }

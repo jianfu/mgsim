@@ -231,7 +231,7 @@ void Processor::ThreadTable::Cmd_Read(ostream& out, const vector<string>& argume
                     << " | ";
 
                 out << left << setfill(' ') << setw(9) <<  ThreadStateNames[thread.state]
-					<< "|" << out << left << setw (6) << setfill(' ') << thread.mtid; 
+					<< " | " << left << dec << setw (6) << setfill(' ') << (int)thread.mtid 
                     << " | " << setw (9) << GetKernel()->GetSymbolTable()[thread.pc];
 				
             }

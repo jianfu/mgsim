@@ -633,7 +633,6 @@ bool Processor::Network::OnBreak(LFID fid)
             DeadlockWrite("F%u unable to mark ALLOCATION_DONE due to break", (unsigned)fid);
             return false;
         }
-		DebugSimWrite("F%u can not break twice", (unsigned)fid)
     }
     
     if (family.link != INVALID_LFID)
@@ -1178,7 +1177,7 @@ Result Processor::Network::DoLink()
                 LinkMessage fwd;
                 fwd.type                  = LinkMessage::MSG_PAIR;
 				fwd.pair.mlfid            = family.link;
-                fwd.pair.rlfid            = family.corr_fid;
+                fwd.pair.rlfid            = rfamily.link;
                 fwd.pair.completion_pid   = msg.pair.completion_pid;
                 fwd.pair.completion_reg   = msg.pair.completion_reg;
 				fwd.pair.first_fid        = msg.pair.first_fid;
@@ -1420,7 +1419,7 @@ Result Processor::Network::DorLink()
 									LinkMessage fwd;
 									fwd.type                  = LinkMessage::MSG_PAIR;
 									fwd.pair.mlfid            = family.link;
-									fwd.pair.rlfid            = family.corr_fid;
+									fwd.pair.rlfid            = rfamily.link;
 									fwd.pair.completion_pid   = msg.pair.completion_pid;
 									fwd.pair.completion_reg   = msg.pair.completion_reg;
 									fwd.pair.first_fid        = msg.pair.first_fid;
