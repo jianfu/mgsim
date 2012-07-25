@@ -280,9 +280,14 @@ Result Processor::Network::DoAllocResponse()
 
     // Grab the previous FID from the link field
     msg.prev_fid = family.link;
+	
     
     // Set the link field to the next FID (LFID_INVALID if failed)
-    COMMIT{ family.link = msg.next_fid; }
+    COMMIT
+	{
+		family.link  = msg.next_fid;
+		family.nlink = msg.nnext_fid;
+	}
     
     // Number of cores in the place up to, and including, this core
     const PSize numCores = (m_parent.GetPID() % family.placeSize) + 1;
@@ -304,8 +309,12 @@ Result Processor::Network::DoAllocResponse()
     else
     {
         // Commit the allocation
-        COMMIT{ family.numCores = msg.numCores; }
-        msg.next_fid = lfid;
+        COMMIT
+		{ 
+			family.numCores = msg.numCores;
+			msg.nnext_fid = msg.next_fid;
+			msg.next_fid = lfid;
+		}
     }
     
     if (msg.prev_fid == INVALID_LFID)
@@ -377,7 +386,11 @@ Result Processor::Network::DorAllocResponse()
     msg.prev_fid = family.link;
     
     // Set the link field to the next FID (LFID_INVALID if failed)
-    COMMIT{ family.link = msg.next_fid; }
+    COMMIT
+	{ 
+		family.link = msg.next_fid; 
+		family.nlink = msg.nnext_fid;
+	}
     
     // Number of cores in the place up to, and including, this core
     const PSize numCores = (m_parent.GetPID() % family.placeSize) + 1;
@@ -399,8 +412,12 @@ Result Processor::Network::DorAllocResponse()
     else
     {
         // Commit the allocation
-        COMMIT{ family.numCores = msg.numCores; }
-        msg.next_fid = lfid;
+        COMMIT
+		{ 
+			family.numCores = msg.numCores; 
+			msg.nnext_fid = msg.next_fid;
+			msg.next_fid = lfid;
+		}
     }
     
     if (msg.prev_fid == INVALID_LFID)

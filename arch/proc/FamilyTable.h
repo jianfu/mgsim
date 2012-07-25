@@ -79,6 +79,7 @@ struct Family
     bool         hasShareds;     // Does this family use shareds?
     Dependencies dependencies;   // The dependencies for termination and cleanup
     LFID         link;           // The LFID of the matching family on the next CPU (prev during allocate)
+	LFID         nlink;          // The LFID of the matching family on the next next CPU 
     bool         prevCleanedUp;  // Last thread has been cleaned up
     bool         broken;         // Family terminated due to break
     

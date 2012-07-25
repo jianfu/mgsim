@@ -246,6 +246,7 @@ struct AllocResponse
     bool     exact;     ///< If the allocate was exact, unwind all the way
     LFID     prev_fid;  ///< FID of the family on the previous (receiver) core
     LFID     next_fid;  ///< FID of the family on the next (sender) core if !failed
+	LFID     nnext_fid;
         
     PID      completion_pid; ///< PID where the thread runs that issued the allocate
     RegIndex completion_reg; ///< Reg on parent_pid of the completion register

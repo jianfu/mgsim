@@ -245,7 +245,6 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecAllocate(
 				
 				m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
 			}
-			//printf("Redundant: C%u, F%u, T%u, R%u\n", (unsigned)m_parent.GetProcessor().GetPID(), (unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned)redundant);
 			
 		//nop for allocate/r
 	}

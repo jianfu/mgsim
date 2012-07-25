@@ -698,6 +698,7 @@ FCapability Processor::Allocator::InitializeFamily(LFID fid) const
         //family.virtBlockSize = 0;
         family.physBlockSize = 0;
         family.link          = INVALID_LFID;
+		family.nlink         = INVALID_LFID;
         family.sync.done     = false;
         family.sync.pid      = INVALID_PID;
         family.hasShareds    = false;
@@ -1333,6 +1334,7 @@ Result Processor::Allocator::DoFamilyAllocate()
             ret.exact          = (req.type == ALLOCATE_EXACT);
             ret.prev_fid       = req.prev_fid;
             ret.next_fid       = INVALID_LFID;
+			ret.nnext_fid       = INVALID_LFID;
             ret.completion_pid = req.completion_pid;
             ret.completion_reg = req.completion_reg;
 			//FT-BEGIN
@@ -1358,6 +1360,7 @@ Result Processor::Allocator::DoFamilyAllocate()
         {
             family.numCores = (req.type == ALLOCATE_SINGLE) ? 1 : req.placeSize;
             family.link     = INVALID_LFID;
+			family.nlink    = INVALID_LFID;
         }
         DebugSimWrite("F%u finished allocation on %u cores", (unsigned)lfid, (unsigned)family.numCores);
         
@@ -1396,6 +1399,7 @@ Result Processor::Allocator::DoFamilyAllocate()
                 ret.exact          = (req.type == ALLOCATE_EXACT);
                 ret.prev_fid       = req.prev_fid;
                 ret.next_fid       = lfid;
+				ret.nnext_fid      = INVALID_LFID;
                 ret.completion_pid = req.completion_pid;
                 ret.completion_reg = req.completion_reg;
 				//FT-BEGIN

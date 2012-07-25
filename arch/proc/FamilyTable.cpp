@@ -192,8 +192,8 @@ void Processor::FamilyTable::Cmd_Read(ostream& out, const vector<string>& argume
     }
     else
     {
-        out << "    |     Initial PC     | Allocated | Threads | P/A/D/Rd |  Cores  | Link |    Sync    |     Capability     | State         |   Symbol  | redundant | rthreadCount | corr_fid | broken" << endl;
-        out << "----+--------------------+-----------+---------+----------+---------+------+------------+--------------------+---------------+-----------+-----------+--------------+----------+--------" << endl;
+        out << "    |     Initial PC     | Allocated | Threads | P/A/D/Rd |  Cores  | Link | nLink |    Sync    |     Capability     | State         |   Symbol  | redundant | rthreadCount | corr_fid | broken" << endl;
+        out << "----+--------------------+-----------+---------+----------+---------+------+-------+------------+--------------------+---------------+-----------+-----------+--------------+----------+--------" << endl;
         for (set<LFID>::const_iterator p = fids.begin(); p != fids.end(); ++p)
         {
             const Family& family = m_families[*p];
@@ -201,7 +201,7 @@ void Processor::FamilyTable::Cmd_Read(ostream& out, const vector<string>& argume
             out << dec << right << setw(3) << setfill(' ') << *p << " | ";
             if (family.state == FST_EMPTY)
             {
-                out << "                   |           |         |          |         |      |            |                    |               |           |           |              |          |";
+                out << "                   |           |         |          |         |      |      |            |                    |               |           |           |              |          |";
             }
             else
             {
@@ -239,6 +239,13 @@ void Processor::FamilyTable::Cmd_Read(ostream& out, const vector<string>& argume
                 out << setfill('0') << right;
                 if (family.link != INVALID_LFID) {
                     out << " F" << setw(2) << family.link;
+                } else {
+                    out << "  - ";
+                }
+				
+				out <<" | " << setfill('0') << right;
+                if (family.nlink != INVALID_LFID) {
+                    out << " F" << setw(2) << family.nlink;
                 } else {
                     out << "  - ";
                 }
