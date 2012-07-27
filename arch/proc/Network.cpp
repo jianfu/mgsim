@@ -115,6 +115,7 @@ bool Processor::Network::SendMessage(const RemoteMessage& msg)
     (RemoteMessage&)dmsg = msg;
     dmsg.src = m_parent.GetPID();
 
+	
     // Get destination
     switch (msg.type)
     {
@@ -156,6 +157,14 @@ bool Processor::Network::SendMessage(const RemoteMessage& msg)
             return SUCCESS;
         }
 
+		// Avoid multiple break messages
+		if (msg.type == RemoteMessage::MSG_BREAK)
+		{
+			Family& family = m_familyTable[msg.brk.fid];
+			if (family.broken)
+				return true;
+		}
+		
         if (!m_delegateIn.Write(dmsg))
         {
             DeadlockWrite("Unable to buffer local network message to loopback %s", msg.str().c_str());
@@ -1172,7 +1181,12 @@ Result Processor::Network::DoLink()
 			Family& family  = m_familyTable[msg.pair.mlfid];
 			Family& rfamily = m_familyTable[msg.pair.rlfid];
 			
-			COMMIT{family.corr_fid = rfamily.link;}
+			bool flag = m_parent.GetPID()%2;
+			
+			COMMIT
+			{
+				family.corr_fid = flag ? rfamily.link : msg.pair.rlfid;
+			}
 			
 			if(family.link == INVALID_LFID) //the last core
             {
@@ -1194,7 +1208,7 @@ Result Processor::Network::DoLink()
                 LinkMessage fwd;
                 fwd.type                  = LinkMessage::MSG_PAIR;
 				fwd.pair.mlfid            = family.link;
-                fwd.pair.rlfid            = rfamily.link;
+                fwd.pair.rlfid            = flag ? rfamily.nlink : msg.pair.rlfid;
                 fwd.pair.completion_pid   = msg.pair.completion_pid;
                 fwd.pair.completion_reg   = msg.pair.completion_reg;
 				fwd.pair.first_fid        = msg.pair.first_fid;
@@ -1414,7 +1428,9 @@ Result Processor::Network::DorLink()
 								Family& family  = m_familyTable[msg.pair.mlfid];
 								Family& rfamily = m_familyTable[msg.pair.rlfid];
 								
-								COMMIT{family.corr_fid = rfamily.link;}
+								bool flag = m_parent.GetPID()%2;
+								
+								COMMIT{family.corr_fid = flag ? msg.pair.rlfid : rfamily.link;}
 								
 								if(family.link == INVALID_LFID) //the last core
 								{
@@ -1436,7 +1452,7 @@ Result Processor::Network::DorLink()
 									LinkMessage fwd;
 									fwd.type                  = LinkMessage::MSG_PAIR;
 									fwd.pair.mlfid            = family.link;
-									fwd.pair.rlfid            = rfamily.link;
+									fwd.pair.rlfid            = flag ? msg.pair.rlfid : rfamily.nlink;
 									fwd.pair.completion_pid   = msg.pair.completion_pid;
 									fwd.pair.completion_reg   = msg.pair.completion_reg;
 									fwd.pair.first_fid        = msg.pair.first_fid;

@@ -1025,13 +1025,21 @@ Result Processor::Allocator::DoThreadAllocate()
 				//the mathing thread in redundant thread is not created
 				if (family.rthreadCount == 0)
 				{
+					if (!m_alloc.Push(fid))
+					{
+						DeadlockWrite("Unable to reinject F%u at back of allocation queue", (unsigned)fid);
+						return FAILED;
+					}
+					// printf("C%uF%u: pop F%u\n", (unsigned)m_parent.GetPID(), (unsigned)fid, (unsigned)m_alloc.Front());
+							
+					m_alloc.Pop();
+					
 					DebugSimWrite("F%u waiting for redundant thread(s)", (unsigned)fid);
 					return SUCCESS;						
 				}
 			}
 			//FT-END
 					
-						
 			
             // We only allocate from a special pool once:
             // for the first thread of the family.
@@ -1537,7 +1545,11 @@ bool Processor::Allocator::QueueCreate(const LinkMessage& msg)
         {
             // Last core in the restricted chain, clear the link.
             // Everything after this core will be cleaned up.
-            COMMIT{ family.link = INVALID_LFID; }
+            COMMIT
+			{ 
+				family.link  = INVALID_LFID; 
+				family.nlink = INVALID_LFID;
+			}
         }
         DebugSimWrite("F%u forwarding create", (unsigned)msg.create.fid);
     }
@@ -1881,7 +1893,11 @@ Result Processor::Allocator::DoFamilyCreate()
             if (family.numCores == 1)
             {
                 // We've reduced the number of cores to one, clear link
-                COMMIT{ family.link = INVALID_LFID; }
+                COMMIT
+				{ 
+					family.link  = INVALID_LFID; 
+					family.nlink = INVALID_LFID;
+				}
             }
         }
         
@@ -2133,8 +2149,14 @@ void Processor::Allocator::CalculateDistribution(Family& family, Integer nThread
 
     // If the numCores is 1, the family can start inside a place, so we can't use
     // placeSize to calculate the skip. The skip is 0 in that case.
-    Integer nThreadsSkipped = (numCores > 1) ? threadsPerCore * (m_parent.GetPID() % family.placeSize) : 0;
-        
+	Integer nThreadsSkipped;
+	
+	if (family.redundant)
+		nThreadsSkipped = (numCores > 1) ? threadsPerCore * ((m_parent.GetPID()+1-(m_parent.GetPID()%2)*2) % family.placeSize) : 0;
+	else
+		nThreadsSkipped = (numCores > 1) ? threadsPerCore * (m_parent.GetPID() % family.placeSize) : 0;
+  
+    
     // Calculate number of threads to run on this core
     nThreads = std::min(std::max(nThreads, nThreadsSkipped) - nThreadsSkipped, threadsPerCore);
     
@@ -2160,7 +2182,7 @@ Processor::Allocator::Allocator(const string& name, Processor& parent, Clock& cl
  :  Object(name, parent, clock),
     m_parent(parent), m_familyTable(familyTable), m_threadTable(threadTable), m_registerFile(registerFile), m_raunit(raunit), m_icache(icache), m_dcache(dcache), m_network(network), m_pipeline(pipeline),
     m_bundle        ("b_indirectcreate", *this, clock, config.getValueOrDefault<BufferSize>(*this,"IndirectCreateQueueSize", 8)),
-    m_alloc         ("b_alloc",          *this, clock, config.getValueOrDefault<BufferSize>(*this, "InitialThreadAllocateQueueSize", familyTable.GetNumFamilies())),
+    m_alloc         ("b_alloc",          *this, clock, config.getValueOrDefault<BufferSize>(*this, "InitialThreadAllocateQueueSize", familyTable.GetNumFamilies()), 2),
     m_creates       ("b_creates",        *this, clock, config.getValueOrDefault<BufferSize>(*this, "CreateQueueSize", familyTable.GetNumFamilies()), 3),
     m_cleanup       ("b_cleanup",        *this, clock, config.getValueOrDefault<BufferSize>(*this, "ThreadCleanupQueueSize", threadTable.GetNumThreads()), 4),
     m_createState   (CREATE_INITIAL),

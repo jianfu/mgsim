@@ -23,7 +23,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::WritebackStage::OnCycle()
     }
     
     if (m_input.Rrc.type != RemoteMessage::MSG_NONE)
-    {
+    {	
         // Network activity
         if (!m_network.SendMessage(m_input.Rrc))
         {
