@@ -260,7 +260,8 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
 		/* FT */						 opt(m_network.m_delegateOut * m_network.m_syncs * m_allocator.m_readyThreads2) ^
 									     opt(m_allocator.m_alloc) ^
 										 opt(m_network.m_delegateOut * m_network.m_rlink.out * m_allocator.m_readyThreads2) ^
-										 opt(m_network.m_delegateOut * m_network.m_link.out * m_allocator.m_readyThreads2));
+										 opt(m_network.m_delegateOut * m_network.m_link.out * m_allocator.m_readyThreads2)  ^
+										 opt(m_allocator.m_cleanup * m_allocator.m_cleanup));
 
     m_allocator.p_FamilyAllocate.SetStorageTraces(
         m_network.m_allocResponse.out ^ m_network.m_rallocResponse.out ^ m_allocator.m_creates ^ m_network.m_link.out ^ m_network.m_rlink.out ^ DELEGATE * opt(DELEGATE) );
