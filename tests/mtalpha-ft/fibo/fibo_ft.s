@@ -1,0 +1,51 @@
+    #
+    # Calculate fibonacci(N)
+    #
+    # Expects N (with N >= 2) in $10
+    # Result ends up in $1
+    #
+    .file "fibo.s"
+    .set noat
+    .arch ev6
+    .text
+    
+    .ent main
+    .globl main
+main:
+	mov 0<<1|1, $30    # CID<<1|Size  CID=?*Size
+ 	allocate/s $30, 1, $3
+	####
+	allocate/rs $30, 1, $4
+	pair  $3, $4
+	pair  $4, $3
+	rmtwr $4
+	####
+    subl    $10, 1, $10
+    setlimit $3, $10     # $10 = N
+	setblock $3, $11     # $11 = BS
+    swch
+    cred    $3, fibonacci
+    mov     0, $0
+    puts    $0, $3, 0
+    mov     1, $1
+    puts    $1, $3, 1
+    sync    $3, $0
+    mov     $0, $31
+    gets    $3, 1, $0
+    detach  $3
+    mov     $0, $31
+    end
+    .end main
+
+    .ent fibonacci
+    .registers 0 2 0 0 0 0      # GR,SR,LR, GF,SF,LF
+fibonacci:
+    addl $d0, $d1, $s1
+    swch
+    mov $d1, $s0
+    end
+    .end fibonacci
+
+    .section .rodata
+    .ascii "\0TEST_INPUTS:R10:2 5 7 12\0"
+	

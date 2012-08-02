@@ -855,7 +855,8 @@ Result Processor::Allocator::DoThreadAllocate()
 		DebugSimWrite("F%u/T%u(%llu) is popped",
 					  (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
 
-		
+
+
 		if(!thread.cleanupFlag)
 		{
         // Clear the thread's dependents, if any
@@ -896,7 +897,10 @@ Result Processor::Allocator::DoThreadAllocate()
             const MemAddr tls_base = m_parent.GetTLSAddress(fid, tid);
             const MemSize tls_size = m_parent.GetTLSSize();
             m_parent.UnmapMemory(tls_base+tls_size/2, tls_size/2);
+
+
 			}
+
 		}
 		
         if (family.dependencies.allocationDone)
@@ -989,7 +993,10 @@ Result Processor::Allocator::DoThreadAllocate()
 			}
 		
 		}
+
+
 		return SUCCESS;
+
     }
     
     assert (!m_alloc.Empty());
@@ -1040,6 +1047,7 @@ Result Processor::Allocator::DoThreadAllocate()
 			}
 			//FT-END
 					
+
 			
             // We only allocate from a special pool once:
             // for the first thread of the family.
@@ -2003,7 +2011,10 @@ Result Processor::Allocator::DoThreadActivation()
 	//FT-BEGIN
     Thread& thread = m_threadTable[tid];
 	Family& family = m_familyTable[thread.family];
+
+
 	if (family.redundant && thread.mtid == INVALID_TID && !family.broken)  //redundant family without mtid  //except "break"
+
 	{
 		DebugSimWrite("F%u T%u: Redundant thread activation failed.\n", (unsigned)thread.family, (unsigned)tid);
 		return SUCCESS;
