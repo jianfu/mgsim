@@ -5,7 +5,7 @@
     .ascii "\0TEST_INPUTS:R10:4 7 10\0"
 
     # Matrix width (only square matrices supported)
-    .equ MAX_N,    10
+    .equ MAX_N,    1000
     
     # Block sizes, comment lines to not set the block size
     .equ BLOCK1,    5
@@ -23,14 +23,14 @@ main:
     ldpc     $27
     ldgp $29, 0($27)
     
-	allocate/s $31, 0, $4
+	allocate/s $12, 1, $4
 	
 	# create (fam1; 0; N;)
 	setlimit $4, $10
 	swch
-	.ifdef BLOCK1
-	setblock $4, BLOCK1
-	.endif
+	#.ifdef BLOCK1
+	setblock $4, $11
+	#.endif
 	cred    $4, thread1
 	
 	ldah    $0, A($29)      !gprelhigh
@@ -47,6 +47,10 @@ main:
 
 	putg    $10, $4, 3      # $g3 = N
 	
+	putg    $14, $4, 4
+	putg    $13, $4, 5
+	
+	
 	# sync(fam1);
 	sync    $4, $0
 	release $4
@@ -61,10 +65,11 @@ main:
     # $g2 = C
     # $g3 = N
     # $l0 = i
-	.registers 4 0 3  0 0 0	    # GR,SR,LR, GF,SF,LF
+	.registers 6 0 3  0 0 0	    # GR,SR,LR, GF,SF,LF
 thread1:
-	allocate/s $31, 0, $l2
+	allocate/s $g4, 1, $l2
 	setlimit $l2, $g3
+	setblock $l2, $g5
 	swch
 	cred $l2, thread2
 	

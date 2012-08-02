@@ -5,7 +5,7 @@
     .ascii "\0TEST_INPUTS:R10:4 7 10\0"
 
     # Matrix width (only square matrices supported)
-    .equ MAX_N,    16
+    .equ MAX_N,    1000
     
     # Block sizes, comment lines to not set the block size
     .equ BLOCK1,    1
@@ -24,14 +24,14 @@ main:
     ldpc     $27
     ldgp $29, 0($27)
     
-	allocate/s $31, 0, $4
+	allocate/s $12, 1, $4
 	
 	#	create (fam1; 0; N;)
 	setlimit $4, $10
 	swch
-	.ifdef BLOCK1
-	setblock $4, BLOCK1
-	.endif
+	#.ifdef BLOCK1
+	setblock $4, $11
+	#.endif
 	cred $4, thread1
 	
 	ldah    $0, A($29)      !gprelhigh
@@ -48,6 +48,13 @@ main:
 	
 	putg    $10, $4, 3      # $g3 = N
 
+    putg    $14, $4, 4      #PID(mid)
+	putg    $13, $4, 5      #BS(mid)
+	
+	putg    $15, $4, 6      #BS(inner)
+	putg    17, $4, 7       #pid (inner)
+
+
 	#	sync(fam1);
 	sync    $4, $0
 	release $4
@@ -62,19 +69,22 @@ main:
     # $g2 = C
     # $g3 = N
     # $l0 = i
-	.registers 4 0 5  0 0 0	    # GR,SR,LR, GF,SF,LF
+	.registers 8 0 5  0 0 0	    # GR,SR,LR, GF,SF,LF
 thread1:
-	allocate/s $31, 0, $l4
+	allocate/s $g4, 1, $l4
 	
 	setlimit $l4, $g3
 	swch
-	.ifdef BLOCK2
-	setblock $l4, BLOCK2
-	.endif
+	#.ifdef BLOCK2
+	setblock $l4, $g5
+	#.endif
 	cred $l4, thread2
 	
 	putg    $g1, $l4, 1         # $g1 = B
 	putg    $g3, $l4, 3         # $g3 = N
+
+	putg    $g7, $l4, 4
+	putg    $g6, $l4, 5
 
 	mull    $l0, $g3, $l0       # $l0 = i*N
 	s4addl  $l0, $g2, $l2 
@@ -96,11 +106,12 @@ thread1:
     # $g2 = &C[i*N]
     # $g3 = N
     # $l0 = j
-	.registers 4 0 3  0 0 0	    # GR,SR,LR, GF,SF,LF
+	.registers 6 0 3  0 0 0	    # GR,SR,LR, GF,SF,LF
 thread2:
-    allocate/s $31, 0, $l2
+    allocate/s $g4, 1, $l2
     setlimit $l2, $g3
     swch
+	setblock $l2, $g5
     cred $l2, thread3
     
     putg    $g0, $l2, 0         # {$g0} = &A[i*N]

@@ -30,8 +30,9 @@ main:
     ldah    $29, 0($27)     !gpdisp!1
     lda     $29, 0($29)     !gpdisp!1
     
-    allocate/s $31, 0, $4
+    allocate/s $12, 1, $4
     setlimit $4, $10
+	setblock $4, $11
     cred    $4, loop
     
     ldah    $0, X($29)      !gprelhigh
@@ -125,10 +126,10 @@ loop:
 
     .section .bss
     .align 6
-X:  .skip 1001 * 8
+X:  .skip 10001 * 8
     .align 6
-Y:  .skip 1001 * 8
+Y:  .skip 10001 * 8
     .align 6
-Z:  .skip 1001 * 8
+Z:  .skip 10001 * 8
     .align 6
-U:  .skip 1001 * 8
+U:  .skip 10001 * 8

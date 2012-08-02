@@ -22,13 +22,15 @@ main:
     ldgp    $29, 0($27)
     
     # Family runs from [0 ... #procs - 1]
-    allocate/s $31, 0, $5
+	mov 5, $30   #PID=2, Size=1
+    allocate/s $30, 1, $5
     
     getpid   $3
     negq     $3, $4
     and      $3, $4, $3     # $3 = place.size
     setlimit $5, $3
-    
+	setblock $5, $11
+	
     cred    $5, outer
     
     ldah    $0, X($29)      !gprelhigh
@@ -39,6 +41,8 @@ main:
     lda     $0, Y($0)       !gprellow
     putg    $0, $5, 1       # $g1 = Y
     
+	putg    $12, $5, 4
+	
     # Calculate N / #procs
     divqu    $10, $3, $2
     putg     $2,  $5, 2     # $g2 = normal_size = N / #procs
@@ -67,7 +71,7 @@ main:
 # $l0  = i (0.. #procs - 1)
     .globl outer
     .ent outer
-    .registers 4 0 5 0 1 1
+    .registers 5 0 5 0 1 1
 outer:
     mulq    $l0, $g2, $l1       # $l1 = start
     addq    $g2,   1, $l2       # $l2 = more_size = normal_size + 1
@@ -84,11 +88,14 @@ outer:
     and     $l3, $l4, $l3
     sll     $l0, 1, $l0
     or      $l3, $l0
-    or      $l3, 1, $l3         # $l3 = PID for i-th core in the place
+    or     $l3, 1, $l3         # $l3 = PID for i-th core in the place
+	
+	
     
     allocate/s $l3, 0, $l3
     setstart $l3, $l1
     setlimit $l3, $l2
+	setblock $l3, $g4
     cred     $l3, loop
     
     putg $g0, $l3, 0            # $g0 = X
@@ -128,6 +135,6 @@ loop:
 
     .section .bss
     .align 6
-X:  .skip 1001 * 8
+X:  .skip 10001 * 8
     .align 6
-Y:  .skip 1001 * 8
+Y:  .skip 10001 * 8

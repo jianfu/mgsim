@@ -38,10 +38,13 @@ main:
     lda     $29, 0($29)     !gpdisp!1   # $29 = GP
     
     negq    1, $5
-    allocate/s $31, 0, $4
+	
+	mov 5, $30
+    allocate/s $30, 0, $4
     setstart $4, $10
     setlimit $4, $5
     setstep  $4, $5
+	setblock $4, $11
     cred    $4, outer
     
     ldah    $0, X($29)      !gprelhigh
@@ -55,6 +58,9 @@ main:
     putg    1,  $4, 2       # $g2 = 1
     puts    0,  $4, 0       # $d0 = 0
     
+	putg    $12, $4, 3
+	putg    $13, $4, 4
+	
     sync    $4, $0
     release $4
     mov     $0, $31
@@ -71,13 +77,14 @@ main:
 # $l0 = m
 #
     .ent outer
-    .registers 3 1 3 0 0 0
+    .registers 5 1 3 0 0 0
 outer:
-    allocate/s $31, 0, $l1
+    allocate/s $g3, 0, $l1
     sll      $g2, $l0, $l0       # $l0 = 1 << m = ii
     setlimit $l1, $l0; swch
     setstart $l1, 1
     setstep  $l1, 2
+	setblock $l1, $g4
     addq     $d0, $l0, $l0; swch # $l0 = ipntp
     cred     $l1, inner
     putg     $g0, $l1, 0         # $g0 = X
@@ -124,6 +131,6 @@ inner:
 
     .section .bss   
     .align 6
-X:  .skip 1001 * 8
+X:  .skip 100001 * 8
     .align 6
-V:  .skip 1001 * 8
+V:  .skip 100001 * 8

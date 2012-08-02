@@ -33,8 +33,9 @@ main:
     ldpc     $27
     ldgp     $29, 0($27)    # $29 = GP
     
-    allocate/s $31, 0, $3   # Start = 0, Step = 1
+    allocate/s $12, 0, $3   # Start = 0, Step = 1
     setlimit $3, $10        # Limit = N
+	setblock $3, $11
     cred     $3, loop
 
     mov     Q, $0;
@@ -67,6 +68,28 @@ main:
     sync     $3, $0        # Sync
     release  $3
     mov      $0, $31
+	
+	/*
+	#print results
+	ldah $2, X($29) !gprelhigh
+	lda  $2, X($2)  !gprellow     # $2  = &X[0]
+	
+	mov $31, $0                   # $0  = i = 0
+	
+lbody:
+	s8addq $0, $2, $1             # $1  = &X[i]
+	ldt $f0, 0($1)                # $f0 = X[i]
+	
+	mov 48,$3
+	printf $f0, $3                # print X[i]  (128 for integer)
+	
+	lda $0, 1($0)                 # $0 = $0 + 1   (i++)
+	cmpeq $0, $10, $1             # $1 = (i==N) ? 1 : 0
+	beq $1, lbody                 # if(i==0) lbody
+
+lend:	
+	nop
+	*/
     end
     .end main
 
@@ -110,8 +133,8 @@ loop:
 #
     .section .bss
     .align 6
-X:  .skip 1001 * 8
+X:  .skip 2501 * 8
     .align 6
-Y:  .skip 1001 * 8
+Y:  .skip 2501 * 8
     .align 6
-Z:  .skip 1001 * 8
+Z:  .skip 2501 * 8

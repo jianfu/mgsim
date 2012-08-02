@@ -39,10 +39,11 @@ main:
     lda     $4,    M
     lda     $5, 1001
     
-    allocate/s $31, 0, $3
+    allocate/s $12, 1, $3
     setstart $3, 6
     setlimit $3, $5
     setstep  $3, $4
+	setblock $3, $11
     cred    $3, outer
     
     ldah    $0, X($29)      !gprelhigh
@@ -70,11 +71,14 @@ main:
     addq    $10, $2,  $2
     srl     $2,  32,  $2
     putg    $2,  $3,   2     # $g2 = N/5
+	putg    5, $3, 3
+	putg    $13, $3, 4
     
     sync    $3, $0
     release $3
     mov     $0, $31
-    end
+	
+	end
     
     .end main
     
@@ -87,10 +91,11 @@ main:
 # $l0 = i
 #
     .ent outer
-    .registers 3 0 5 0 0 3
+    .registers 5 0 5 0 0 3
 outer:
-    allocate/s $31, 0, $l3
+    allocate/s $g3, 1, $l3
     setlimit $l3, $g2; swch
+	setblock $l3, $g4
     cred     $l3, inner
     
     putg    $l0, $l3, 0; swch   # $g0  = i
@@ -142,6 +147,6 @@ inner:
 
     .section .bss
     .align 6
-X:  .skip 1001 * 8
+X:  .skip 10001 * 8
     .align 6
-Y:  .skip 1001 * 8
+Y:  .skip 10001 * 8

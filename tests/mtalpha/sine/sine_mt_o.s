@@ -12,7 +12,8 @@
     .ent main
     .globl main
 main:
-	allocate/s $31, 0, $2
+	mov 5, $30
+	allocate/s $30, 1, $2
 
     # Calculate the sine of 2 (in radians)
     mov     2, $0
@@ -24,7 +25,7 @@ main:
 	setstart $2, 2; swch
 	setlimit $2, (TAYLOR_ITERATIONS + 1) * 2
 	setstep  $2, 2
-	setblock $2, 1
+	setblock $2, $11
 	cred    $2, sin
 	puts    1,   $2, 0      # $d0  = 1 (factorial)
 	fputg   $f1, $2, 0      # $gf0 = x**2

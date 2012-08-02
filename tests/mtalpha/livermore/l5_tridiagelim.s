@@ -27,9 +27,11 @@ main:
     ldpc     $27
     ldgp    $29, 0($27)
     
-    allocate/s $31, 0, $4
+	mov 5, $30
+    allocate/s $30, 1, $4
     setstart $4, 1
     setlimit $4, $10
+	setblock $4, $11
     cred    $4, loop
     
     ldah    $0, X($29)          !gprelhigh
@@ -78,9 +80,9 @@ loop:
 
     .section .bss
     .align 6
-X:  .skip 1001 * 8
+X:  .skip 10001 * 8
     .align 6
-Y:  .skip 1001 * 8
+Y:  .skip 10001 * 8
     .align 6
-Z:  .skip 1001 * 8
+Z:  .skip 10001 * 8
     

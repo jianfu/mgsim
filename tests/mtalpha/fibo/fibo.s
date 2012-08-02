@@ -12,9 +12,11 @@
     .ent main
     .globl main
 main:
-    allocate/s $31, 0, $3
+    mov 0<<1|1, $30
+	allocate/s $30, 0, $3
     subl    $10, 1, $10
     setlimit $3, $10
+	setblock $3, $11
     swch
     cred    $3, fibonacci
     mov     0, $0

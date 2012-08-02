@@ -5,7 +5,7 @@
     .ascii "\0TEST_INPUTS:R10:4 7 10\0"
 
     # Matrix width (only square matrices supported)
-    .equ MAX_N, 10
+    .equ MAX_N, 1000
 
 #
 # Multiply matrixA by matrixB and store result in matrixC. Single depth uTC version.
@@ -21,8 +21,9 @@ main:
     ldgp $29, 0($27)
     
 	#	create (fam1; 0; N;)
-	allocate/s $31, 0, $4
+	allocate/s $12, 1, $4
 	setlimit $4, $10
+	setblock $4, $11
 	swch
 	cred    $4, thread1
 	

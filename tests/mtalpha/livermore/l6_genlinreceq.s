@@ -31,10 +31,11 @@ main:
     ldpc     $27
     ldgp    $29, 0($27)
     
-    allocate/s $31, 0, $4
+	mov 5, $30
+    allocate/s $30, 1, $4
     setstart $4, 1
     setlimit $4, $10
-    setblock $4, 2
+    setblock $4, $11
     cred    $4, outer
     
     ldah    $0, X($29)      !gprelhigh
@@ -44,6 +45,9 @@ main:
     ldah    $0, Y($29)      !gprelhigh
     lda     $0, Y($0)       !gprellow
     putg    $0, $4, 1       # $g1 = Y
+	
+	putg    129, $4, 2
+	putg    $12, $4, 3
     
     puts    $31, $4, 0      # $d0 = token
     
@@ -62,10 +66,11 @@ main:
 # $l0  = i
 #
     .ent outer
-    .registers 2 1 6 0 0 2    
+    .registers 4 1 6 0 0 2    
 outer:
-    allocate/s $31, 0, $l3
+	allocate/s $g2, 1, $l3
     setlimit $l3, $l0; swch
+	setblock $l3, $g3
     mov     $d0, $31; swch
     cred    $l3, inner
     
@@ -122,6 +127,6 @@ inner:
     
     .section .bss
     .align 6
-X:  .skip 1001 * 8
+X:  .skip 10001 * 8
     .align 6
-Y:  .skip 64 * 64 * 8
+Y:  .skip 128 * 128 * 8
