@@ -62,7 +62,7 @@ class ParallelMemory::Port : public Object
 
                 m_memory.Read(request.address, data, m_lineSize);
 
-                if (!m_callback.OnMemoryReadCompleted(request.address, data))
+                if (!m_callback.OnMemoryReadCompleted(request.address, data, 0))
                 {
                     return FAILED;
                 }

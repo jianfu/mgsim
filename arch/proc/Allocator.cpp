@@ -1637,7 +1637,8 @@ Result Processor::Allocator::DoBundle()
     if (m_bundleState == BUNDLE_INITIAL)
     {
         Result      result;
-        if ((result = m_dcache.Read(info.addr, m_bundleData, sizeof(Integer) * 2 + sizeof(MemAddr), 0)) == FAILED)
+		//There is a potential bug, which TID is 0. [FT] 
+        if ((result = m_dcache.Read(info.addr, m_bundleData, sizeof(Integer) * 2 + sizeof(MemAddr), 0, 0)) == FAILED)
         {
             DeadlockWrite("Unable to fetch the D-Cache line for %#016llx for bundle creation", (unsigned long long)info.addr);
             return FAILED;
@@ -2014,7 +2015,6 @@ Result Processor::Allocator::DoThreadActivation()
 
 
 	if (family.redundant && thread.mtid == INVALID_TID && !family.broken)  //redundant family without mtid  //except "break"
-
 	{
 		DebugSimWrite("F%u T%u: Redundant thread activation failed.\n", (unsigned)thread.family, (unsigned)tid);
 		return SUCCESS;

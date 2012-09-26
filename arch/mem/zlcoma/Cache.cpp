@@ -1118,7 +1118,7 @@ bool ZLCOMA::Cache::OnReadCompleted(MemAddr addr, const char* data)
 
     for (std::vector<IMemoryCallback*>::const_iterator p = m_clients.begin(); p != m_clients.end(); ++p)
     {
-        if (*p != NULL && !(*p)->OnMemoryReadCompleted(addr, data))
+        if (*p != NULL && !(*p)->OnMemoryReadCompleted(addr, data, 0))
         {
             DeadlockWrite("Unable to send read completion to clients");
             return false;

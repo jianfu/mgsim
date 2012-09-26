@@ -383,7 +383,7 @@ inline Arbitrator* Clock::ActivateArbitrator(Arbitrator& arbitrator)
 class Object
 {
     Object*              m_parent;      ///< Parent object.
-    std::string          m_name;        ///< Object name.
+	std::string          m_name;        ///< Object name.
     std::string          m_fqn;         ///< Full object name.
     Clock&               m_clock;       ///< Clock that drives this object.
     Kernel&              m_kernel;      ///< The kernel that manages this object.

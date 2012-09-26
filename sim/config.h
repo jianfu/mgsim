@@ -251,7 +251,7 @@ public:
 
     void registerRelation(const Simulator::Object& left, const Simulator::Object& right, const std::string& name, bool sibling = false, bool bidi = false)
     {
-        m_linkprops[std::make_pair(refObject(left), std::make_pair(refObject(right), std::make_pair(sibling,bidi)))].push_back(std::make_pair(makeSymbol(name), refEntity()));
+		m_linkprops[std::make_pair(refObject(left), std::make_pair(refObject(right), std::make_pair(sibling,bidi)))].push_back(std::make_pair(makeSymbol(name), refEntity()));
     }
 
     template<typename T, typename U>

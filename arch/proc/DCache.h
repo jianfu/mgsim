@@ -65,6 +65,9 @@ private:
     Processor&           m_parent;          ///< Parent processor.
     Allocator&			 m_allocator;       ///< Allocator component.
 	FamilyTable&		 m_familyTable;     ///< Family table .
+	//FT--BEGIN
+	ThreadTable&  		m_threadTable;
+	//FT--END
 	RegisterFile&		 m_regFile;         ///< Register File.
 	IMemory&             m_memory;          ///< Memory
 	MCID                 m_mcid;            ///< Memory Client ID
@@ -77,8 +80,8 @@ private:
     Buffer<Response>     m_incoming;        ///< Incoming buffer from memory bus.
     Buffer<Request>      m_outgoing;        ///< Outgoing buffer to memory bus.
     WritebackState       m_wbstate;         ///< Writeback state
-
-
+	
+	
     // Statistics
 
     uint64_t             m_numRHits;
@@ -105,7 +108,7 @@ private:
     Result DoOutgoingRequests();
 
 public:
-    DCache(const std::string& name, Processor& parent, Clock& clock, Allocator& allocator, FamilyTable& familyTable, RegisterFile& regFile, IMemory& memory, Config& config);
+    DCache(const std::string& name, Processor& parent, Clock& clock, Allocator& allocator, FamilyTable& familyTable, ThreadTable& threadTable, RegisterFile& regFile, IMemory& memory, Config& config);
     ~DCache();
     
     // Processes
@@ -116,13 +119,13 @@ public:
     ArbitratedService<> p_service;
 
     // Public interface
-    Result Read (MemAddr address, void* data, MemSize size, RegAddr* reg);
+    Result Read (MemAddr address, void* data, MemSize size, RegAddr* reg, TID tid);
     Result Write(MemAddr address, void* data, MemSize size, LFID fid, TID tid);
 
     size_t GetLineSize() const { return m_lineSize; }
 
     // Memory callbacks
-    bool OnMemoryReadCompleted(MemAddr addr, const char* data);
+    bool OnMemoryReadCompleted(MemAddr addr, const char* data, MCID);
     bool OnMemoryWriteCompleted(TID tid);
     bool OnMemorySnooped(MemAddr addr, const char* data, const bool* mask);
     bool OnMemoryInvalidated(MemAddr addr);

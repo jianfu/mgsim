@@ -68,7 +68,7 @@ public:
     Result DoMemoryOutgoing();
     Result DoBusOutgoing();
 
-    bool OnMemoryReadCompleted(MemAddr addr, const char* data) ;
+    bool OnMemoryReadCompleted(MemAddr addr, const char* data, MCID) ;
     bool OnMemoryWriteCompleted(TID tid);
     bool OnMemorySnooped(MemAddr /*unused*/, const char* /*data*/, const bool* /*mask*/) { return true; }
     bool OnMemoryInvalidated(MemAddr /*unused*/) { return true; }

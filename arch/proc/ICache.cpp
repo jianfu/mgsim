@@ -375,7 +375,7 @@ Result Processor::ICache::Fetch(MemAddr address, MemSize size, TID* tid, CID* ci
     return DELAYED;
 }
 
-bool Processor::ICache::OnMemoryReadCompleted(MemAddr addr, const char *data)
+bool Processor::ICache::OnMemoryReadCompleted(MemAddr addr, const char *data, MCID)
 {
     // Instruction cache line returned, store in cache and Buffer
     
@@ -518,7 +518,8 @@ void Processor::ICache::Cmd_Read(std::ostream& out, const std::vector<std::strin
 {
     if (arguments.empty())
     {
-        out << "Cache type:          ";
+        out << "MCID:                " << dec << m_mcid << endl
+			<< "Cache type:          ";
         if (m_assoc == 1) {
             out << "Direct mapped" << endl;
         } else if (m_assoc == m_lines.size()) {

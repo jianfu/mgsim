@@ -24,7 +24,7 @@ Processor::Processor(const std::string& name, Object& parent, Clock& clock, PID 
     m_raunit      ("rau",           *this, clock, m_registerFile, config),
     m_allocator   ("alloc",         *this, clock, m_familyTable, m_threadTable, m_registerFile, m_raunit, m_icache, m_dcache, m_network, m_pipeline, config),
     m_icache      ("icache",        *this, clock, m_allocator, memory, config),
-    m_dcache      ("dcache",        *this, clock, m_allocator, m_familyTable, m_registerFile, memory, config),
+    m_dcache      ("dcache",        *this, clock, m_allocator, m_familyTable, m_threadTable, m_registerFile, memory, config),
     m_pipeline    ("pipeline",      *this, clock, m_registerFile, m_network, m_allocator, m_familyTable, m_threadTable, m_icache, m_dcache, fpu, config),
     m_network     ("network",       *this, clock, grid, m_allocator, m_registerFile, m_familyTable, config),
     m_mmio        ("mmio",          *this, clock),
@@ -48,7 +48,8 @@ Processor::Processor(const std::string& name, Object& parent, Clock& clock, PID 
     config.registerProperty(*this, "fpregs", (uint32_t)m_registerFile.GetSize(RT_FLOAT));
     config.registerProperty(*this, "freq", (uint32_t)clock.GetFrequency());
     config.registerBidiRelation(*this, fpu, "fpu");
-
+	
+	
     // Get the size, in bits, of various identifiers.
     // This is used for packing and unpacking various fields.
     m_bits.pid_bits = ilog2(GetGridSize());

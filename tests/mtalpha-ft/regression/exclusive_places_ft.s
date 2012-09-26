@@ -61,9 +61,13 @@ foo:
     mov      $l0, $31
     swch
     gets     $l2, 0, $l1        # $l1 = {$s0}
-    release  $l2
+	nop
+	nop
+	nop
+	nop
+	release  $l2
     addq     $d0, $l1, $s0
-    end
+	end
     .end foo
     
 # $g0 = GP
