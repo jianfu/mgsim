@@ -55,9 +55,9 @@ namespace Simulator
 		size_t      						m_bufferindexbits;  // bits necessary to hold a set number
 		
 		StorageTraceSet               		m_storages;
-		typedef Buffer<Line>				request_buffer;
-		std::vector<request_buffer*>		m_compBuffer0;
-		std::vector<request_buffer*>		m_compBuffer1;
+		typedef std::deque<Line>		request_buffer;
+		std::vector<request_buffer>		m_compBuffer0;
+		std::vector<request_buffer>		m_compBuffer1;
 		
 		std::vector<IMemoryCallback*>		m_clients;		//ICache, DCache, DCA
 		IMemory&            				m_memory;      //L2
@@ -72,7 +72,6 @@ namespace Simulator
 		Process     						p_Incoming;
 		Process 							p_Outgoing;
 		Process								p_Transfer;
-		Process								p;
 		
 		ComponentModelRegistry&     		m_registry;
 		

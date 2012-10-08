@@ -36,26 +36,12 @@ CompBuffer::CompBuffer(const std::string& name,
 	p_Incoming      (*this, "incoming",     delegate::create<CompBuffer, &CompBuffer::DoIncoming>(*this) ),
     p_Outgoing      (*this, "outgoing",      delegate::create<CompBuffer, &CompBuffer::DoOutgoing>(*this) ),
 	p_Transfer      (*this, "transfer",      delegate::create<CompBuffer, &CompBuffer::DoTransfer>(*this) ),
-	p		 	     (*this, "nop",      delegate::create<CompBuffer, &CompBuffer::DoNop>(*this) ),
 	m_registry		(config),
 	p_service        (*this, clock, "p_service")
 {
 	m_compBuffer0.resize(1 << m_bufferindexbits);
 	m_compBuffer1.resize(1 << m_bufferindexbits);
 
-	for (size_t i = 0; i < m_compBuffer0.size(); ++i)
-	{
-		
-		stringstream ss1, ss2;
-        ss1 << "leftset" << i;
-		ss2 << "rightset" << i;
-		m_compBuffer0[i] = new request_buffer(ss1.str(), * this, clock, INFINITE);
-		m_compBuffer1[i] = new request_buffer(ss2.str(), * this, clock, INFINITE);
-		
-		(*m_compBuffer0[i]).Sensitive(p);
-		(*m_compBuffer1[i]).Sensitive(p);
-	}
-	
 	m_incoming.Sensitive(p_Incoming);
     m_outgoing.Sensitive(p_Outgoing);
 	m_transfer.Sensitive(p_Transfer);
@@ -99,10 +85,7 @@ MCID CompBuffer::RegisterClient(IMemoryCallback& callback, Process& process, Sto
 	p_service.AddCyclicProcess(process);
 	//p_service.AddProcess(process);
 	
-	StorageTraceSet tmp;
-	for (size_t i = 0; i < m_compBuffer0.size(); ++i)
-		tmp =  tmp ^ *m_compBuffer0[i] ^ *m_compBuffer1[i]; 
-	traces = ((tmp * opt(m_incoming)) ^ (opt(m_transfer) * m_outgoing)) * traces;
+	traces = (opt(m_incoming) ^ (opt(m_transfer) * m_outgoing)) * traces;
 	
 	m_storages *= opt(storage);
 	//p_Incoming will forward OnMemoryxxx from memroy to L1
@@ -169,14 +152,14 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
 	
 	DebugMemWrite("Write to cb%u: %#016llx, from %u", (unsigned)m_mcid, (unsigned long long)address, (unsigned)(id & 1));
 	
-	if(id & 1 == 1) //DCache
+	if((id & 1) == 1) //DCache
 	{
 		TID mtid = (id >> 3) & ((1 << m_bufferindexbits) - 1);
 		bool coming_from_right = (id >> 1) & 1; 
 		bool redundant = (id >> 2) & 1;
 		MCID real_mcid = id >> (m_bufferindexbits + 3);
 		
-		std::vector<request_buffer*>* m_compBuffer = (coming_from_right == redundant) ? &m_compBuffer0 : &m_compBuffer1;
+		std::vector<request_buffer>& m_compBuffer = (coming_from_right == redundant) ? m_compBuffer0 : m_compBuffer1;
 		
 		Line line;
 		line.address  	= address;
@@ -189,31 +172,23 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
 		DebugMemWrite("Write to cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)address);
 		
 		//Write data to CB directly if it is empty.
-		if((*m_compBuffer)[mtid]->Empty())
+		if(m_compBuffer[mtid].empty())
 		{
-			if (!((*m_compBuffer)[mtid]->Push(line)))
-			{
-				DeadlockWrite("Unable to push line to CompBuffer");
-				return false;
-			}
-			DebugMemWrite("Write to buffer of cb%u: %#016llx, empty", (unsigned)m_mcid, (unsigned long long)address);
-			return true;
+                    COMMIT{ m_compBuffer[mtid].push_back(line); }
+                    DebugMemWrite("Write to buffer of cb%u: %#016llx, empty", (unsigned)m_mcid, (unsigned long long)address);
+                    return true;
 		}
 		else  
 		{
-			const Line& templine = (*m_compBuffer)[mtid]->Front();
+			const Line& templine = m_compBuffer[mtid].front();
 		
 			//They come from the same thread.
 			//Push the line to CB.
 			if(templine.redundant == line.redundant)  
 			{
-				if (!((*m_compBuffer)[mtid]->Push(line)))
-				{
-					DeadlockWrite("Unable to push line to CompBuffer");
-					return false;
-				}
-				DebugMemWrite("Write to buffer of cb%u: %#016llx, same thread", (unsigned)m_mcid, (unsigned long long)address);
-				return true;
+                            COMMIT{ m_compBuffer[mtid].push_back(line); }
+                            DebugMemWrite("Write to buffer of cb%u: %#016llx, same thread", (unsigned)m_mcid, (unsigned long long)address);
+                            return true;
 			}
 			else  //They should be compared if they come from different thread (i.e. master and redundant).
 			{
@@ -260,7 +235,7 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
 					DebugMemWrite("TLS Write to m_transfer from cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)templine.address);		
 				}
 				
-				(*m_compBuffer)[mtid]->Pop();
+				COMMIT{ m_compBuffer[mtid].pop_front(); }
 			}
 		}	
 	}
@@ -301,20 +276,23 @@ bool CompBuffer::OnMemoryReadCompleted(MemAddr addr, const char* data, MCID mcid
 	//Master thread from left core, or redundant from right,
 	//Both of them are mapped to left CB (i.e. CompBuffer0).
 	//The others are mapped to right CB (i.e. CompBuffer1).
-	std::vector<request_buffer*>* m_compBuffer = (coming_from_right == redundant) ? &m_compBuffer0 : &m_compBuffer1;
+
+        // FIXME: read completion / snoop should really use the arbitrator, too!
+
+	std::vector<request_buffer>& m_compBuffer = (coming_from_right == redundant) ? m_compBuffer0 : m_compBuffer1;
 	
 	//It is a dcache request.
 	//And its sender is my client.
-	if((mcid & 1 == 1) && (real_mcid == m_mcid))
+	if(((mcid & 1) == 1) && (real_mcid == m_mcid))
 	{
 		//find the latest one
-		for (Buffer<Line>::const_iterator p = (*m_compBuffer)[mtid]->begin(); p != (*m_compBuffer)[mtid]->end(); ++p)
+            for (request_buffer::const_iterator p = m_compBuffer[mtid].begin(); p != m_compBuffer[mtid].end(); ++p)
 		{
 			//Hit
 			if(p->address == addr && p->redundant == redundant)
 			{	
 				//copy the data to mdate when mask is ture
-				line::blit(&mdata[0], p->data.data, p->data.mask, m_lineSize);	
+                                line::blit(&mdata[0], p->data.data, p->data.mask, m_lineSize);	
 				DebugMemWrite("Completed Read with merge in cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)addr);
 			}
 		}
@@ -511,7 +489,7 @@ Result CompBuffer::DoNop()
 
 void CompBuffer::Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const
 {	
-	const std::vector<request_buffer*>* compBuffer = NULL;
+	const std::vector<request_buffer>* compBuffer = NULL;
 	
 	if (arguments[0] == "left")
 		compBuffer = &m_compBuffer0;
@@ -525,10 +503,10 @@ void CompBuffer::Cmd_Read(std::ostream& out, const std::vector<std::string>& arg
 	
 	out << "SETid  |  Id  |       Address       |                        Data                     |  flag  " << endl;
 	out << "-------+------+---------------------+-------------------------------------------------+--------" << endl;
-	for (size_t mtid = 0; mtid < (*compBuffer).size(); ++mtid)
+	for (size_t mtid = 0; mtid < compBuffer->size(); ++mtid)
 	{		 
 		int i = 0;
-		for (Buffer<Line>::const_iterator p = (*compBuffer)[mtid]->begin(); p != (*compBuffer)[mtid]->end(); ++p)
+		for (request_buffer::const_iterator p = (*compBuffer)[mtid].begin(); p != (*compBuffer)[mtid].end(); ++p)
 		{
 			out << mtid << dec;
 			out << "      |"
