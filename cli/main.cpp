@@ -188,7 +188,7 @@ static void ParseArguments(int argc, const char ** argv, ProgramConfig& config)
             }
                 
             if (arg[1] == 'R') {
-                value >> *(signed Integer*)&val.m_integer;
+                value >> *(SInteger*)&val.m_integer;
                 addr = MAKE_REGADDR(RT_INTEGER, index);
             } else {
                 double f;
