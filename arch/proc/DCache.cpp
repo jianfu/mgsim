@@ -398,7 +398,8 @@ Result Processor::DCache::Write(MemAddr address, void* data, MemSize size, LFID 
         DeadlockWrite("Unable to push request to outgoing buffer");
         return FAILED;
     }
-
+	DebugMemWrite("Write to m_outgoing from dcache: %#016llx", (unsigned long long)request.address);
+    
     COMMIT{ ++m_numWAccesses; }
 
     return DELAYED;
@@ -726,6 +727,7 @@ Result Processor::DCache::DoOutgoingRequests()
             DeadlockWrite("Unable to send write to 0x%016llx to memory", (unsigned long long)request.address);
             return FAILED;
         }
+		DebugMemWrite("Write to cb from dcache m_outgoing: %#016llx", (unsigned long long)request.address);
     }
     else
     {

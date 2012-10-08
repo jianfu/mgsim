@@ -212,8 +212,8 @@ void Processor::ThreadTable::Cmd_Read(ostream& out, const vector<string>& argume
     else
     {
 
-        out << "    |         PC         | Fam | Index | Next | PC/K | State     | mtid   | Symbol" << endl;
-        out << "----+--------------------+-----+-------+------+------+-----------+--------+-----------" << endl;
+        out << "    |         PC         | Fam | Index | Next | PC/K | State     |  mtid  | PW | Symbol" << endl;
+        out << "----+--------------------+-----+-------+------+------+-----------+--------+----+---------" << endl;
 		
         for (set<TID>::const_iterator p = tids.begin(); p != tids.end(); ++p)
         {
@@ -234,6 +234,7 @@ void Processor::ThreadTable::Cmd_Read(ostream& out, const vector<string>& argume
 
                 out << left << setfill(' ') << setw(9) <<  ThreadStateNames[thread.state]
 					<< " | " << left << dec << setw (6) << setfill(' ') << (int)thread.mtid 
+					<< " | " << dec << setw (6) << setfill(' ') << thread.dependencies.numPendingWrites
                     << " | " << setw (9) << GetKernel()->GetSymbolTable()[thread.pc];
 				
             }

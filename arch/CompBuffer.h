@@ -67,14 +67,17 @@ namespace Simulator
 
 		Buffer<Response>    				m_incoming;        ///< Incoming buffer from memory bus.
 		Buffer<Request>      				m_outgoing;        ///< Outgoing buffer to memory bus.
-		
+		Buffer<Request>						m_transfer;
+			
 		Process     						p_Incoming;
 		Process 							p_Outgoing;
+		Process								p_Transfer;
 		Process								p;
 		
 		ComponentModelRegistry&     		m_registry;
 		
-		ArbitratedService<>					p_service;
+		ArbitratedService<PriorityCyclicArbitratedPort>					p_service;
+		//ArbitratedService<>					p_service;
 		
 	public:
 		
@@ -94,6 +97,7 @@ namespace Simulator
 		
 		Result DoOutgoing();
 		Result DoIncoming();
+		Result DoTransfer();
 		Result DoNop();
 		
 		MCID RegisterClient  (IMemoryCallback& callback, Process& process, StorageTraceSet& traces, Storage& storage, bool grouped);

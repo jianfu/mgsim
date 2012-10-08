@@ -32,8 +32,10 @@ CompBuffer::CompBuffer(const std::string& name,
 	m_firstregistered_dcache(false),
 	m_incoming       ("b_incoming",  *this, clock, config.getValueOrDefault<BufferSize>(*this, "IncomingBufferSize", INFINITE)),
     m_outgoing       ("b_outgoing",  *this, clock, config.getValueOrDefault<BufferSize>(*this, "OutgoingBufferSize", INFINITE)),
+	m_transfer		("b_transfer",  *this, clock, config.getValueOrDefault<BufferSize>(*this, "TransferBufferSize", INFINITE)),
 	p_Incoming      (*this, "incoming",     delegate::create<CompBuffer, &CompBuffer::DoIncoming>(*this) ),
     p_Outgoing      (*this, "outgoing",      delegate::create<CompBuffer, &CompBuffer::DoOutgoing>(*this) ),
+	p_Transfer      (*this, "transfer",      delegate::create<CompBuffer, &CompBuffer::DoTransfer>(*this) ),
 	p		 	     (*this, "nop",      delegate::create<CompBuffer, &CompBuffer::DoNop>(*this) ),
 	m_registry		(config),
 	p_service        (*this, clock, "p_service")
@@ -56,7 +58,9 @@ CompBuffer::CompBuffer(const std::string& name,
 	
 	m_incoming.Sensitive(p_Incoming);
     m_outgoing.Sensitive(p_Outgoing);
+	m_transfer.Sensitive(p_Transfer);
 	
+	p_Transfer.SetStorageTraces(m_outgoing);
 }
 
 // Format of MCID for FT-supported clients: All DCache, ICache, and DCA will get a FT-MCID.
@@ -92,12 +96,13 @@ MCID CompBuffer::RegisterClient(IMemoryCallback& callback, Process& process, Sto
 		ft_mcid |= 0;  // Non-DCache
 	
 	//L1's p_Outgoing will call the read and write function in this object.
-	p_service.AddProcess(process);
+	p_service.AddCyclicProcess(process);
+	//p_service.AddProcess(process);
 	
 	StorageTraceSet tmp;
 	for (size_t i = 0; i < m_compBuffer0.size(); ++i)
 		tmp =  tmp ^ *m_compBuffer0[i] ^ *m_compBuffer1[i]; 
-	traces = ((tmp * opt(m_incoming)) ^ m_outgoing) * traces;
+	traces = ((tmp * opt(m_incoming)) ^ (opt(m_transfer) * m_outgoing)) * traces;
 	
 	m_storages *= opt(storage);
 	//p_Incoming will forward OnMemoryxxx from memroy to L1
@@ -144,6 +149,7 @@ bool CompBuffer::Read (MCID id, MemAddr address)
 		DeadlockWrite("Unable to push request to outgoing buffer, CB.");
 		return false;
 	}
+	DebugMemWrite("Read to cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)address);
 	
 	return true;
 }
@@ -151,14 +157,17 @@ bool CompBuffer::Read (MCID id, MemAddr address)
 	
 bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID wid)
 {
+	//printf("Write to cb%u: %#016llx\n", (unsigned)m_mcid, (unsigned long long)address);
 	if (!p_service.Invoke())
 	{
-		DeadlockWrite("Unable to acquire port for CompBuffer read access %#016llx", (unsigned long long)address);
+		DeadlockWrite("Unable to acquire port for CompBuffer write access %#016llx", (unsigned long long)address);
 		return false;
 	}
 	
 	MCID		temp_client = 0;
 	WClientID	temp_wid = 0;
+	
+	DebugMemWrite("Write to cb%u: %#016llx, from %u", (unsigned)m_mcid, (unsigned long long)address, (unsigned)(id & 1));
 	
 	if(id & 1 == 1) //DCache
 	{
@@ -168,7 +177,6 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
 		MCID real_mcid = id >> (m_bufferindexbits + 3);
 		
 		std::vector<request_buffer*>* m_compBuffer = (coming_from_right == redundant) ? &m_compBuffer0 : &m_compBuffer1;
-	
 		
 		Line line;
 		line.address  	= address;
@@ -177,6 +185,9 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
 		line.client		= real_mcid;
 		line.wid		= wid;
 	
+		//printf ("addr=0x%016llx, mcid=%u\n", (unsigned long long)address, (unsigned)id);
+		DebugMemWrite("Write to cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)address);
+		
 		//Write data to CB directly if it is empty.
 		if((*m_compBuffer)[mtid]->Empty())
 		{
@@ -185,6 +196,7 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
 				DeadlockWrite("Unable to push line to CompBuffer");
 				return false;
 			}
+			DebugMemWrite("Write to buffer of cb%u: %#016llx, empty", (unsigned)m_mcid, (unsigned long long)address);
 			return true;
 		}
 		else  
@@ -200,27 +212,53 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
 					DeadlockWrite("Unable to push line to CompBuffer");
 					return false;
 				}
+				DebugMemWrite("Write to buffer of cb%u: %#016llx, same thread", (unsigned)m_mcid, (unsigned long long)address);
 				return true;
 			}
 			else  //They should be compared if they come from different thread (i.e. master and redundant).
 			{
-				for(size_t i = 0; i < m_lineSize; i++)  //Compare mask first
+				if(templine.address == address) //same address
 				{
-					if(line.data.mask[i] != templine.data.mask[i])  
-						return false;  //Error.  Mask are not same.
-				}
-				//mask are same.
-				for(size_t i = 0; i < m_lineSize; i++)
-				{
-					if(line.data.mask[i]) //Only compare the valid data.
+					for(size_t i = 0; i < m_lineSize; i++)  //Compare mask first
 					{
-						if (line.data.data[i] != templine.data.data[i]) //An error is detected.
-							return false; //Error
-							//We need to flush L1 and CB...
+						if(line.data.mask[i] != templine.data.mask[i])  
+						{
+							DebugMemWrite("cb%u: %#016llx, Comparison failed because of mask!", (unsigned)m_mcid, (unsigned long long)address);
+							return false;  //Error.  Mask are not same.
+						}
 					}
+					//mask are same.
+					for(size_t i = 0; i < m_lineSize; i++)
+					{
+						if(line.data.mask[i]) //Only compare the valid data.
+						{
+							if (line.data.data[i] != templine.data.data[i]) //An error is detected.
+							{
+								DebugMemWrite("cb%u: %#016llx, Comparison failed because of data!", (unsigned)m_mcid, (unsigned long long)address);
+								return false; //Error
+								//We need to flush L1 and CB...
+							}
+						}
+					}
+					temp_client	= templine.client;
+					temp_wid	= templine.wid;
+					DebugMemWrite("Write to m_outgoing from cb%u: %#016llx, Comparison success!", (unsigned)m_mcid, (unsigned long long)address);
 				}
-				temp_client	= templine.client;
-				temp_wid	= templine.wid;
+				else //TLS, ignore them, push current line and templine to outgoing buffer
+				{
+					Request temprequest;
+					temprequest.write     = true;
+					temprequest.address   = templine.address;
+					temprequest.data      = templine.data;
+					temprequest.wid		  = (templine.wid << 48) | (templine.client << 32) | (temp_wid << 16) | temp_client; 
+					if (!m_transfer.Push(temprequest))
+					{
+						DeadlockWrite("Unable to push request to transfer buffer, CB.");
+						return false;
+					}
+					DebugMemWrite("TLS Write to m_outgoing from cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)address);
+					DebugMemWrite("TLS Write to m_transfer from cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)templine.address);		
+				}
 				
 				(*m_compBuffer)[mtid]->Pop();
 			}
@@ -257,6 +295,8 @@ bool CompBuffer::OnMemoryReadCompleted(MemAddr addr, const char* data, MCID mcid
 	char mdata[m_lineSize];
 	std::copy(data, data + m_lineSize, &mdata[0]);
 	
+	DebugMemWrite("Completed Read to cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)addr);
+	
 	//Looking for the data in CB.
 	//Master thread from left core, or redundant from right,
 	//Both of them are mapped to left CB (i.e. CompBuffer0).
@@ -267,6 +307,7 @@ bool CompBuffer::OnMemoryReadCompleted(MemAddr addr, const char* data, MCID mcid
 	//And its sender is my client.
 	if((mcid & 1 == 1) && (real_mcid == m_mcid))
 	{
+		//find the latest one
 		for (Buffer<Line>::const_iterator p = (*m_compBuffer)[mtid]->begin(); p != (*m_compBuffer)[mtid]->end(); ++p)
 		{
 			//Hit
@@ -274,6 +315,7 @@ bool CompBuffer::OnMemoryReadCompleted(MemAddr addr, const char* data, MCID mcid
 			{	
 				//copy the data to mdate when mask is ture
 				line::blit(&mdata[0], p->data.data, p->data.mask, m_lineSize);	
+				DebugMemWrite("Completed Read with merge in cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)addr);
 			}
 		}
 	}
@@ -299,9 +341,10 @@ bool CompBuffer::OnMemoryWriteCompleted(WClientID wid)
 	response.client0	= (wid >> 32) & (((size_t) 1 << 16) - 1);
 	response.wid1		= (wid >> 16) & (((size_t) 1 << 16) - 1);
 	response.client1	= wid         & (((size_t) 1 << 16) - 1);
+	
 	if (!m_incoming.Push(response))
 	{
-		DeadlockWrite("Unable to push request to outgoing buffer, CB.");
+		DeadlockWrite("Unable to push request to incoming buffer, CB.");
 		return false;
 	}
 	return true;
@@ -350,6 +393,7 @@ Result CompBuffer::DoOutgoing()
             DeadlockWrite("Unable to send write to 0x%016llx to memory, CB", (unsigned long long)request.address);
             return FAILED;
         }
+		DebugMemWrite("Write to memory from cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)request.address);		
     }
     else
     {
@@ -358,6 +402,7 @@ Result CompBuffer::DoOutgoing()
             DeadlockWrite("Unable to send read to 0x%016llx to memory, CB", (unsigned long long)request.address);
             return FAILED;
         }
+		DebugMemWrite("Read to memory from cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)request.address);		
     }
 
     m_outgoing.Pop();
@@ -369,7 +414,6 @@ Result CompBuffer::DoIncoming()
 {
     assert(!m_incoming.Empty());
     const Response& response = m_incoming.Front();
-	
 	
 	switch (response.type)
 	{
@@ -395,6 +439,7 @@ Result CompBuffer::DoIncoming()
 						DeadlockWrite("Unable to process write completion for DCA client %u, CB", (unsigned)response.client0);
 						return FAILED;
 					}
+					DebugMemWrite("Completed DCA Write from cb%u to client[%u]", (unsigned)m_mcid, (unsigned)response.client0);		
 				}
 				else
 				{
@@ -415,10 +460,23 @@ Result CompBuffer::DoIncoming()
 						wid1	= response.wid0;
 					}
 					
-					if (!m_clients[client0]->OnMemoryWriteCompleted(wid0) || !m_clients[client1]->OnMemoryWriteCompleted(wid1))
+					if (client0 == 0) //only one client is valid
 					{
-						DeadlockWrite("Unable to process write completion for client %u, CB", (unsigned)response.client0);
-						return FAILED;
+						if (!m_clients[client1]->OnMemoryWriteCompleted(wid1))
+						{
+							DeadlockWrite("Unable to process write completion for client %u, CB, only one client.", (unsigned)client1);
+							return FAILED;
+						}
+						DebugMemWrite("Completed TLS Write from cb%u to client[%u](tid%u)", (unsigned)m_mcid, (unsigned)client1, (unsigned)wid1);
+					}
+					else
+					{
+						if (!m_clients[client0]->OnMemoryWriteCompleted(wid0) || !m_clients[client1]->OnMemoryWriteCompleted(wid1))
+						{
+							DeadlockWrite("Unable to process write completion for client %u and client %u, CB", (unsigned)client0, (unsigned)client1);
+							return FAILED;
+						}
+						DebugMemWrite("Completed Write from cb%u to client[%u](tid%u) and client[%u](tid%u)", (unsigned)m_mcid, (unsigned)client0, (unsigned)wid0, (unsigned)client1, (unsigned)wid1);
 					}
 				}
 				break;
@@ -430,6 +488,22 @@ Result CompBuffer::DoIncoming()
     return SUCCESS;
 }
 
+Result CompBuffer::DoTransfer()
+{
+	assert(!m_transfer.Empty());
+    const Request& request = m_transfer.Front();
+
+	if (!m_outgoing.Push(request))
+	{
+		DeadlockWrite("Unable to push request to outgoing buffer from transfer buffer, CB.");
+		return FAILED;
+	}
+	DebugMemWrite("TLS Write to m_outgoing from m_transfer in cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)request.address);		
+	
+	m_transfer.Pop();
+    return SUCCESS;
+}
+
 Result CompBuffer::DoNop()
 {
 	return SUCCESS;
@@ -437,50 +511,54 @@ Result CompBuffer::DoNop()
 
 void CompBuffer::Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const
 {	
-   if (arguments[0] == "left")  
-   {
-		out << "SETid  |  Id  |       Address       |              Data            |              Mask            |  flag  " << endl;
-		out << "-------+------+---------------------+------------------------------+------------------------------+--------" << endl;
-		for (size_t mtid = 0; mtid < m_compBuffer0.size(); ++mtid)
+	const std::vector<request_buffer*>* compBuffer = NULL;
+	
+	if (arguments[0] == "left")
+		compBuffer = &m_compBuffer0;
+	else if (arguments[0] == "right")
+		compBuffer = &m_compBuffer1;
+	else
+	{
+		out << "Please identify which buffer you want to read, left or right?" << endl;
+		return;
+	}
+	
+	out << "SETid  |  Id  |       Address       |                        Data                     |  flag  " << endl;
+	out << "-------+------+---------------------+-------------------------------------------------+--------" << endl;
+	for (size_t mtid = 0; mtid < (*compBuffer).size(); ++mtid)
+	{		 
+		int i = 0;
+		for (Buffer<Line>::const_iterator p = (*compBuffer)[mtid]->begin(); p != (*compBuffer)[mtid]->end(); ++p)
 		{
-		   out << setw(8) << mtid << dec << left;
-		   int i = 0;
-		   for (Buffer<Line>::const_iterator p = m_compBuffer0[mtid]->begin(); p != m_compBuffer0[mtid]->end(); ++p)
-		   {
-				out << "       |"
-					<< setw(4) << i << dec << left << "|"
-				    << setw(21) << p->address << hex << right << "|"
-				    << setw(30) << p->data.data << hex << right << "|"
-					<< setw(30) << p->data.mask << hex << right << "|"
-					<< setw(8) << p->redundant << dec << right << "|"
-					<< endl;
-				i++;
-		   }
-	    }
-   }
-   else if (arguments[0] == "right")  
-   {
-	   out << "SETid  |  Id  |       Address       |              Data            |              Mask            |  flag  " << endl;
-	   out << "-------+------+---------------------+------------------------------+------------------------------+--------" << endl;
-	   for (size_t mtid = 0; mtid < m_compBuffer0.size(); ++mtid)
-	   {
-		   out << setw(8) << mtid << dec << left;
-		   int i = 0;
-		   for (Buffer<Line>::const_iterator p = m_compBuffer1[mtid]->begin(); p != m_compBuffer1[mtid]->end(); ++p)
-		   {
-			   out << "       |"
-				   << setw(4) << i << dec << left << "|"
-				   << setw(21) << p->address << hex << right << "|"
-				   << setw(30) << p->data.data << hex << right << "|"
-				   << setw(30) << p->data.mask << hex << right << "|"
-				   << setw(8) << p->redundant << dec << right << "|"
-				   << endl;
-			   i++;
-		   }
-	   }
-   }
-   else
-	   out << "Please identify which buffer you want to read, left or right?" << endl;
+			out << mtid << dec;
+			out << "      |"
+				<< setw(6) << setfill(' ') << left << i << dec << "|"
+				<< hex << "0x" << setw(16) << setfill('0') << p->address << "   |";
+			
+			out << hex << setfill('0');
+			static const int BYTES_PER_LINE = 16;
+			for (size_t y = 0; y < m_lineSize; y += BYTES_PER_LINE)
+			{
+				for (size_t x = y; x < y + BYTES_PER_LINE; ++x) 
+				{
+					out << " ";
+					if ((p->data).mask[x]) 
+						out << setw(2) << (unsigned)(unsigned char)((p->data).data[x]);
+					else 
+						out << "  ";
+				}
+				
+				out << " |";
+				
+				if (y + BYTES_PER_LINE < m_lineSize) 
+					out << endl << "       |      |                     |";
+			}
+			
+			out<< p->redundant << endl;	
+			out << "-------+------+---------------------+-------------------------------------------------+--------" << endl;
+			i++;
+		}
+	}
 }
 
 }
