@@ -547,7 +547,7 @@ void MGSystem::Step(CycleNo nCycles)
         ss << "Stalled processes:" << endl;
 
         // See how many processes are in each of the states
-        unsigned int num_stalled = 0, num_running = 0;
+        unsigned int num_stalled = 0, num_running = 0, num_active = 0;
 
         for (const Clock* clock = m_kernel.GetActiveClocks(); clock != NULL; clock = clock->GetNext())
         {
@@ -561,6 +561,9 @@ void MGSystem::Step(CycleNo nCycles)
                     break;
                 case STATE_RUNNING:  
                     ++num_running; 
+                    break;
+                case STATE_ACTIVE:
+                    ++num_active;
                     break;
                 default: 
                     assert(false); 
@@ -582,7 +585,10 @@ void MGSystem::Step(CycleNo nCycles)
 
         ss << endl
            << "Deadlock! (at cycle " << m_kernel.GetCycleNo() << ')' << endl
-           << "(" << num_stalled << " processes stalled;  " << num_running << " processes running; "
+           << "(" 
+           << num_stalled << " processes stalled; " 
+           << num_running << " processes running; "
+           << num_active << " processes active; "
            << num_regs << " registers waited on)";
         throw DeadlockException(ss.str());
     }
