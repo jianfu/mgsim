@@ -1,10 +1,10 @@
 #ifndef PROCESSOR_H
 #define PROCESSOR_H
 
-#include "sim/inspect.h"
-#include "arch/IOBus.h"
-#include "arch/Memory.h"
-#include "arch/BankSelector.h"
+#include <sim/inspect.h>
+#include <arch/IOBus.h>
+#include <arch/Memory.h>
+#include <arch/BankSelector.h>
 
 class Config;
 
@@ -54,10 +54,12 @@ public:
 	
     TSize GetMaxThreadsAllocated() const { return m_threadTable.GetMaxAllocated(); }
     TSize GetTotalThreadsAllocated() { return m_threadTable.GetTotalAllocated(); }
+    TSize GetTotalThreadsCreated() { return m_allocator.GetTotalThreadsCreated(); }
     TSize GetThreadTableSize() const { return m_threadTable.GetNumThreads(); }
     float GetThreadTableOccupancy() { return (float)GetTotalThreadsAllocated() / (float)GetThreadTableSize() / (float)GetKernel()->GetCycleNo(); }
     FSize GetMaxFamiliesAllocated() const { return m_familyTable.GetMaxAllocated(); }
     FSize GetTotalFamiliesAllocated() { return m_familyTable.GetTotalAllocated(); }
+    FSize GetTotalFamiliesCreated() { return m_allocator.GetTotalFamiliesCreated(); }
     FSize GetFamilyTableSize() const { return m_familyTable.GetNumFamilies(); }
     float GetFamilyTableOccupancy() { return (float)GetTotalFamiliesAllocated() / (float)GetFamilyTableSize() / (float)GetKernel()->GetCycleNo(); }
     BufferSize GetMaxAllocateExQueueSize() { return m_allocator.GetMaxAllocatedEx(); }
@@ -93,6 +95,7 @@ public:
     RegisterFile& GetRegisterFile() { return m_registerFile; }
     ICache& GetICache() { return m_icache; }
     DCache& GetDCache() { return m_dcache; }
+    SymbolTable& GetSymbolTable() { return *m_symtable; }
 
 private:
     PID                            m_pid;
@@ -100,6 +103,7 @@ private:
     IMemoryAdmin&                  m_memadmin;
     const std::vector<Processor*>& m_grid;
     FPU&                           m_fpu;
+    SymbolTable*                   m_symtable;
     
     // Bit counts for packing and unpacking configuration-dependent values
     struct

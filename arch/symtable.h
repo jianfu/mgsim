@@ -1,13 +1,15 @@
 #ifndef SYMTABLE_H
 #define SYMTABLE_H
 
+#include "simtypes.h"
+
 #include <vector>
 #include <utility>
 #include <string>
 #include <map>
 #include <iostream>
 
-#include "simtypes.h"
+namespace Simulator {
 
 class SymbolTable 
 {
@@ -36,5 +38,6 @@ protected:
     cache_t m_cache;
 };
 
+}
 
 #endif

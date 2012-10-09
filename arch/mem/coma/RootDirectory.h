@@ -2,7 +2,8 @@
 #define COMA_ROOTDIRECTORY_H
 
 #include "Directory.h"
-#include "mem/DDR.h"
+#include <arch/mem/DDR.h>
+
 #include <queue>
 #include <set>
 
@@ -12,6 +13,7 @@ namespace Simulator
 {
 
 class DDRChannel;
+class DDRChannelRegistry;
 
 class COMA::RootDirectory : public COMA::DirectoryBottom, public DDRChannel::ICallback, public Inspect::Interface<Inspect::Read>
 {
@@ -35,7 +37,7 @@ private:
     IBankSelector&    m_selector;   ///< Mapping of cache line addresses to sets/banks
     std::vector<Line> m_lines;      ///< The cache lines
     size_t            m_lineSize;   ///< The size of a cache-line
-    size_t            m_assoc_dir;  ///< Number of lines in a set in a directory
+    size_t            m_assoc_ring; ///< Number of lines in a set in a directory
     size_t            m_assoc;      ///< Number of lines in a set
     size_t            m_sets;       ///< Number of sets
     size_t            m_id;         ///< Which root directory we are (0 <= m_id < m_numRoots)
@@ -70,7 +72,7 @@ public:
     RootDirectory(const std::string& name, COMA& parent, Clock& clock, size_t id, size_t numRoots, const DDRChannelRegistry& ddr, Config& config);
     
     // Updates the internal data structures to accomodate a system with N directories
-    void SetNumDirectories(size_t num_dirs);
+    void SetNumRings(size_t num_rings);
     
     // Administrative
     const Line* FindLine(MemAddr address) const;

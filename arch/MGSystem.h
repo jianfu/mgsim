@@ -1,13 +1,13 @@
 #ifndef MGSYSTEM_H
 #define MGSYSTEM_H
 
-#include "arch/proc/Processor.h"
-#include "arch/FPU.h"
-#include "arch/CompBuffer.h"
-#include "arch/symtable.h"
-#include "arch/IOBus.h"
-#include "sim/breakpoints.h"
-#include "sim/config.h"
+#include <arch/proc/Processor.h>
+#include <arch/FPU.h>
+#include <arch/CompBuffer.h>
+#include <arch/symtable.h>
+#include <arch/IOBus.h>
+#include <sim/breakpoints.h>
+#include <sim/config.h>
 
 #include <vector>
 #include <utility>
@@ -35,7 +35,7 @@ namespace Simulator {
 		//FT-END
 		
         SymbolTable                 m_symtable;
-        BreakPoints                 m_breakpoints;
+        BreakPointManager           m_breakpoints;
         IMemoryAdmin*               m_memory;
         std::string                 m_objdump_cmd;
         Config&            m_config;

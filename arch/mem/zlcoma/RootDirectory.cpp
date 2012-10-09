@@ -1,6 +1,7 @@
 #include "RootDirectory.h"
-#include "mem/DDR.h"
-#include "sim/config.h"
+#include <arch/mem/DDR.h>
+#include <sim/config.h>
+
 #include <iomanip>
 using namespace std;
 
@@ -78,7 +79,7 @@ bool ZLCOMA::RootDirectory::OnReadCompleted()
     COMMIT
     {
         char data[m_lineSize];
-        m_parent.Read(msg->address, data, m_lineSize);
+        static_cast<VirtualMemory&>(m_parent).Read(msg->address, data, m_lineSize);
 
         line::blitnot(msg->data, data, msg->bitmask, m_lineSize);
         std::fill(msg->bitmask, msg->bitmask + m_lineSize, true);
@@ -381,7 +382,7 @@ Result ZLCOMA::RootDirectory::DoRequests()
             }
             
             COMMIT{
-                m_parent.Write(msg->address, msg->data, 0, m_lineSize);
+                static_cast<VirtualMemory&>(m_parent).Write(msg->address, msg->data, 0, m_lineSize);
                 
                 ++m_nwrites;
                 delete msg; 
@@ -450,7 +451,7 @@ ZLCOMA::RootDirectory::RootDirectory(const std::string& name, ZLCOMA& parent, Cl
     DirectoryBottom(name, parent, clock),
     m_selector (parent.GetBankSelector()),
     m_lineSize (config.getValue<size_t>("CacheLineSize")),
-    m_assoc_dir(config.getValue<size_t>(parent, "L2CacheAssociativity") * config.getValue<size_t>(parent, "NumL2CachesPerDirectory")),
+    m_assoc_dir(config.getValue<size_t>(parent, "L2CacheAssociativity") * config.getValue<size_t>(parent, "NumL2CachesPerRing")),
     m_sets     (m_selector.GetNumBanks()),
     m_id       (id),
     m_numRoots (numRoots),

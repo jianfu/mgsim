@@ -1,25 +1,22 @@
 #include "MGSystem.h"
 
-#include "mem/SerialMemory.h"
-#include "mem/ParallelMemory.h"
-#include "mem/BankedMemory.h"
-#include "mem/DDRMemory.h"
-#include "mem/coma/COMA.h"
-#include "mem/zlcoma/COMA.h"
+#include <arch/mem/SerialMemory.h>
+#include <arch/mem/ParallelMemory.h>
+#include <arch/mem/BankedMemory.h>
+#include <arch/mem/DDRMemory.h>
+#include <arch/mem/coma/COMA.h>
+#include <arch/mem/zlcoma/COMA.h>
 
-#include "arch/dev/NullIO.h"
-#include "arch/dev/LCD.h"
-#include "arch/dev/RTC.h"
-#include "arch/dev/Display.h"
-#include "arch/dev/ActiveROM.h"
-#include "arch/dev/Selector.h"
-#include "arch/dev/SMC.h"
-#include "arch/dev/UART.h"
-#include "arch/dev/RPC.h"
-
-// maybe replace the following if the host-guest syscall API ever
-// changes.
-#include "arch/dev/RPC_unix.h"
+#include <arch/dev/NullIO.h>
+#include <arch/dev/LCD.h>
+#include <arch/dev/RTC.h>
+#include <arch/dev/Display.h>
+#include <arch/dev/ActiveROM.h>
+#include <arch/dev/Selector.h>
+#include <arch/dev/SMC.h>
+#include <arch/dev/UART.h>
+#include <arch/dev/RPC.h>
+#include <arch/dev/RPC_unix.h>
 
 #include <cstdlib>
 #include <iomanip>
@@ -27,9 +24,13 @@
 #include <fstream>
 #include <cmath>
 #include <limits>
-#include <cxxabi.h>
 #include <fnmatch.h>
 #include <cstring>
+
+#ifdef HAVE_GCC_ABI_DEMANGLE
+#include <cxxabi.h>
+#endif
+#include <typeinfo>
 
 using namespace Simulator;
 using namespace std;
@@ -88,9 +89,12 @@ static string GetClassName(const type_info& info)
     char *buf = (char*)malloc(len);
     assert(buf != 0);
 
-    int status;
+    int status = 0;
+    char *res = 0;
 
-    char *res = abi::__cxa_demangle(name, buf, &len, &status);
+#ifdef HAVE_GCC_ABI_DEMANGLE
+    res = abi::__cxa_demangle(name, buf, &len, &status);
+#endif
 
     if (res && status == 0)
     {
@@ -214,6 +218,16 @@ void MGSystem::PrintComponents(ostream& out, const string& pat, size_t levels) c
     ::PrintComponents(out, &m_root, "", pat, levels, 0, false);
 }
 
+static size_t CountComponents(const Object& obj)
+{
+    size_t c = 1;
+    for (size_t i = 0; i < obj.GetNumChildren(); ++i)
+    {
+        c += CountComponents(*obj.GetChild(i));
+    }
+    return c;
+}
+
 void MGSystem::PrintCoreStats(ostream& os) const {
     struct my_iomanip_i fi;
     struct my_iomanip_f ff;
@@ -262,7 +276,8 @@ void MGSystem::PrintCoreStats(ostream& os) const {
         types[j] = I; c[i][j++].i = p.GetMaxAllocateExQueueSize();
         types[j] = I; c[i][j++].i = p.GetTotalAllocateExQueueSize();
         types[j] = F; c[i][j++].f = p.GetAverageAllocateExQueueSize();
-
+        types[j] = I; c[i][j++].i = p.GetTotalFamiliesCreated();
+        types[j] = I; c[i][j++].i = p.GetTotalThreadsCreated();
     }
 
     const size_t NC = j;
@@ -330,6 +345,8 @@ void MGSystem::PrintCoreStats(ostream& os) const {
        << fi << "xqmax" << sep
        << fi << "xqtot" << sep
        << ff << "xqavg" << sep
+       << ff << "fcreates" << sep
+       << ff << "tcreates" << sep
        << endl;
 
     os << "# per-core values" << endl;
@@ -411,7 +428,9 @@ void MGSystem::PrintCoreStats(ostream& os) const {
        << "# ft%occ: family table occupancy (= 100. * ftotal / ftsize / nmastercycles_total)" << endl
        << "# xqmax: high water mark of the exclusive allocate queue size" << endl
        << "# xqtot: cumulative exclusive allocate queue size (over mastertime)" << endl
-       << "# xqavg: average size of the exclusive allocate queue (= xqtot / nmastercycles_total)" << endl;
+       << "# xqavg: average size of the exclusive allocate queue (= xqtot / nmastercycles_total)" << endl
+       << "# fcreates: total number of local families created" << endl
+       << "# tcreates: total number of threads created" << endl;
 
 }
 
@@ -623,7 +642,7 @@ MGSystem::MGSystem(Config& config,
                    const vector<pair<RegAddr, string> >& loads,
                    const vector<string>& extradevs,
                    bool quiet, bool doload)
-    : m_kernel(m_symtable, m_breakpoints),
+    : m_kernel(m_breakpoints),
       m_clock(m_kernel.CreateClock(config.getValue<unsigned long>("CoreFreq"))),
       m_root("", m_clock),
       m_breakpoints(m_kernel),
@@ -671,10 +690,13 @@ MGSystem::MGSystem(Config& config,
         DDRMemory* memory = new DDRMemory("memory", m_root, memclock, config, "RMIX");
         m_memory = memory;
     } else if (memory_type == "COMA") {
-        COMA* memory = new COMA("memory", m_root, memclock, config);
+        COMA* memory = new TwoLevelCOMA("memory", m_root, memclock, config);
         m_memory = memory;
     } else if (memory_type == "ZLCOMA") {
         ZLCOMA* memory = new ZLCOMA("memory", m_root, memclock, config);
+        m_memory = memory;
+    } else if (memory_type == "FLATCOMA") {
+        COMA* memory = new OneLevelCOMA("memory", m_root, memclock, config);
         m_memory = memory;
     } else {
         throw runtime_error("Unknown memory type: " + memory_type);
@@ -683,6 +705,8 @@ MGSystem::MGSystem(Config& config,
     {
         clog << "memory: " << memory_type << endl;
     }
+    m_memory->SetSymbolTable(m_symtable);
+    m_breakpoints.SetSymbolTable(m_symtable);
 
     // Create the event selector
     Clock& selclock = m_kernel.CreateClock(config.getValue<unsigned long>("EventCheckFreq"));
@@ -990,7 +1014,11 @@ MGSystem::MGSystem(Config& config,
         {
             masterfreq /= 1000;
         }
-        clog << "Created Microgrid; simulation running at " << dec << masterfreq << " " << qual[q] << "Hz" << endl;
+        clog << "Created Microgrid: "
+             << dec
+             << CountComponents(m_root) << " components, "
+             << Process::GetAllProcesses().size() << " processes, "
+             << "simulation running at " << dec << masterfreq << " " << qual[q] << "Hz" << endl;
     }
 }
 
