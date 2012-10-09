@@ -1,7 +1,8 @@
 #include "Processor.h"
 #include "FamilyTable.h"
-#include "sim/config.h"
-#include "sim/log2.h"
+#include <sim/config.h>
+#include <sim/log2.h>
+
 #include <cassert>
 #include <iostream>
 #include <sstream>
@@ -33,6 +34,11 @@ Processor::Network::Network(
     m_grid(grid),
     
     m_loadBalanceThreshold(config.getValue<unsigned>(*this, "LoadBalanceThreshold")),
+
+    m_numAllocates(0),
+    m_numBundles(0),
+    m_numCreates(0),
+
 #define CONSTRUCT_REGISTER(name) name(*this, #name)
     CONSTRUCT_REGISTER(m_delegateOut),
     CONSTRUCT_REGISTER(m_delegateIn),
@@ -55,6 +61,10 @@ Processor::Network::Network(
     //FT-END
 	p_Syncs        (*this, "syncs",          delegate::create<Network, &Processor::Network::DoSyncs        >(*this))
 {
+    RegisterSampleVariableInObject(m_numAllocates, SVC_CUMULATIVE);
+    RegisterSampleVariableInObject(m_numBundles, SVC_CUMULATIVE);
+    RegisterSampleVariableInObject(m_numCreates, SVC_CUMULATIVE);
+
     m_delegateOut.Sensitive(p_DelegationOut);
     m_delegateIn .Sensitive(p_DelegationIn);
     
@@ -749,6 +759,10 @@ Result Processor::Network::DoDelegationIn()
             DeadlockWrite("Unable to process family allocation request");
             return FAILED;
         }
+
+        // Statistics
+        COMMIT { ++m_numAllocates; }
+
         break;
         
     case DelegateMessage::MSG_BUNDLE:
@@ -757,6 +771,10 @@ Result Processor::Network::DoDelegationIn()
             DeadlockWrite("Unable to process received indirect create");
             return FAILED;
         }
+
+        // Statistics
+        COMMIT { ++m_numBundles; }
+
         break;
     
     case DelegateMessage::MSG_SET_PROPERTY:
@@ -814,6 +832,9 @@ Result Processor::Network::DoDelegationIn()
                 DeadlockWrite("Unable to process received delegation create");
                 return FAILED;
             }
+            // Statistics
+            COMMIT { ++m_numCreates; }
+
             break;
 	}
         

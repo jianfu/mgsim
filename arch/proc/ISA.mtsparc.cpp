@@ -1,7 +1,8 @@
 #include "Processor.h"
-#include "FPU.h"
-#include "symtable.h"
-#include "programs/mgsim.h"
+#include <arch/FPU.h>
+#include <arch/symtable.h>
+#include <programs/mgsim.h>
+
 #include <cassert>
 #include <cmath>
 #include <sstream>
@@ -707,13 +708,13 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
     case S_OP1_CALL:
         COMMIT
         {
-            m_output.pc   = m_input.pc + m_input.displacement * sizeof(Instruction);
+            m_output.pc = m_input.pc + m_input.displacement * sizeof(Instruction);
             m_output.Rcv.m_integer = m_input.pc;
             m_output.Rcv.m_state   = RST_FULL;
             m_output.Rcv.m_size    = sizeof(Integer);
             DebugFlowWrite("F%u/T%u(%llu) %s call %s",
                            (unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned long long)m_input.logical_index, m_input.pc_sym,
-                           GetKernel()->GetSymbolTable()[m_output.pc].c_str());
+                           m_parent.GetProcessor().GetSymbolTable()[m_output.pc].c_str());
         }
         return PIPE_FLUSH;
         
@@ -749,7 +750,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                     m_output.pc = m_input.pc + m_input.displacement * sizeof(Instruction);
                     DebugFlowWrite("F%u/T%u(%llu) %s branch %s",
                                    (unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned long long)m_input.logical_index, m_input.pc_sym,
-                                   GetKernel()->GetSymbolTable()[m_output.pc].c_str());
+                                   m_parent.GetProcessor().GetSymbolTable()[m_output.pc].c_str());
                 }
                 return PIPE_FLUSH;
             }
@@ -1094,7 +1095,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                 m_output.Rcv.m_state   = RST_FULL;
                 DebugFlowWrite("F%u/T%u(%llu) %s branch %s",
                                (unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned long long)m_input.logical_index, m_input.pc_sym,
-                               GetKernel()->GetSymbolTable()[m_output.pc].c_str());
+                               m_parent.GetProcessor().GetSymbolTable()[m_output.pc].c_str());
             }
             return PIPE_FLUSH;
         }

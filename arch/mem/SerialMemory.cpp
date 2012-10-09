@@ -1,5 +1,6 @@
 #include "SerialMemory.h"
-#include "sim/config.h"
+#include <sim/config.h>
+
 #include <cassert>
 #include <cstring>
 #include <iomanip>
@@ -94,36 +95,6 @@ bool SerialMemory::Write(MCID id, MemAddr address, const MemData& data, WClientI
     return true;
 }
 
-void SerialMemory::Reserve(MemAddr address, MemSize size, ProcessID pid, int perm)
-{
-    return VirtualMemory::Reserve(address, size, pid, perm);
-}
-
-void SerialMemory::Unreserve(MemAddr address, MemSize size)
-{
-    return VirtualMemory::Unreserve(address, size);
-}
-
-void SerialMemory::UnreserveAll(ProcessID pid)
-{
-    return VirtualMemory::UnreserveAll(pid);
-}
-
-void SerialMemory::Read(MemAddr address, void* data, MemSize size)
-{
-    return VirtualMemory::Read(address, data, size);
-}
-
-void SerialMemory::Write(MemAddr address, const void* data, const bool* mask, MemSize size)
-{
-    return VirtualMemory::Write(address, data, mask, size);
-}
-
-bool SerialMemory::CheckPermissions(MemAddr address, MemSize size, int access) const
-{
-    return VirtualMemory::CheckPermissions(address, size, access);
-}
-
 Result SerialMemory::DoRequests()
 {
     assert(!m_requests.Empty());
@@ -183,7 +154,6 @@ Result SerialMemory::DoRequests()
 SerialMemory::SerialMemory(const std::string& name, Object& parent, Clock& clock, Config& config) :
     Object(name, parent, clock),
     m_registry       (config),
-    m_clock          (clock),
     m_requests       ("b_requests", *this, clock, config.getValue<BufferSize>(*this, "BufferSize")),
     p_requests       (*this, clock, "m_requests"),
     m_baseRequestTime(config.getValue<CycleNo>   (*this, "BaseRequestTime")),

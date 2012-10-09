@@ -1,9 +1,10 @@
 #ifndef SERIALMEMORY_H
 #define SERIALMEMORY_H
 
-#include "arch/Memory.h"
-#include "arch/VirtualMemory.h"
-#include "sim/inspect.h"
+#include <arch/Memory.h>
+#include <arch/VirtualMemory.h>
+#include <sim/inspect.h>
+
 #include <deque>
 #include <set>
 
@@ -13,7 +14,7 @@ class ComponentModelRegistry;
 namespace Simulator
 {
 
-class SerialMemory : public Object, public IMemoryAdmin, public VirtualMemory
+class SerialMemory : public Object, public VirtualMemory
 {
     struct Request
     {
@@ -29,15 +30,6 @@ class SerialMemory : public Object, public IMemoryAdmin, public VirtualMemory
     void UnregisterClient(MCID id);
     bool Read (MCID id, MemAddr address);
     bool Write(MCID id, MemAddr address, const MemData& data, WClientID wid);
-	bool CheckPermissions(MemAddr address, MemSize size, int access) const;
-
-    // IMemoryAdmin
-    void Reserve(MemAddr address, MemSize size, ProcessID pid, int perm);
-    void Unreserve(MemAddr address, MemSize size);
-    void UnreserveAll(ProcessID pid);
-
-    void Read (MemAddr address, void* data, MemSize size);
-    void Write(MemAddr address, const void* data, const bool* mask, MemSize size);
 
     void GetMemoryStatistics(uint64_t& nreads, uint64_t& nwrites, 
                              uint64_t& nread_bytes, uint64_t& nwrite_bytes,
@@ -52,7 +44,6 @@ class SerialMemory : public Object, public IMemoryAdmin, public VirtualMemory
     }
 
     ComponentModelRegistry&       m_registry;
-    Clock&                        m_clock;
     std::vector<IMemoryCallback*> m_clients;
     Buffer<Request>               m_requests;
     ArbitratedService<CyclicArbitratedPort>           p_requests;
