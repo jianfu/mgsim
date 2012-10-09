@@ -273,13 +273,13 @@ void Processor::Pipeline::DecodeStage::DecodeInstruction(const Instruction& inst
                     m_output.Rb     = INVALID_REG;
                     break;
 				
-				//FT-BEGIN
-				//Pair reads from and writes to Ra
-				case A_UTHREAD_PAIR:
-					m_output.Rc = MAKE_REGADDR(RT_INTEGER, Ra);
-					break;
-				//FT-END
-					
+                    //FT-BEGIN
+                    //Pair reads from and writes to Ra
+                case A_UTHREAD_PAIR:
+                    m_output.Rc = MAKE_REGADDR(RT_INTEGER, Ra);
+                    break;
+                    //FT-END
+
                 default:
                     break;
                 }
@@ -1102,15 +1102,17 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                     case A_UTHREAD_GETPID:
                     {
                         PlaceID place;
-						Family& family = m_familyTable[m_input.fid];
                         place.size = m_input.placeSize;
-						
-						if ( place.size == 1 && family.redundant)//return the master's PID for reundant family when size is 1
-							place.pid  = m_parent.GetProcessor().GetPID() + 1 - (m_parent.GetProcessor().GetPID()%2)*2;
-						else 
-							place.pid  = m_parent.GetProcessor().GetPID() & -place.size;
+
+                        //FT-BEGIN
+                        Family& family = m_familyTable[m_input.fid];
+                        if ( place.size == 1 && family.redundant)//return the master's PID for reundant family when size is 1
+                            place.pid  = m_parent.GetProcessor().GetPID() + 1 - (m_parent.GetProcessor().GetPID()%2)*2;
+                        else 
+                        //FT-END
+                            place.pid  = m_parent.GetProcessor().GetPID() & -place.size;
                         
-						place.capability = 0x1337; // later: find a proper substitute
+                        place.capability = 0x1337; // later: find a proper substitute
                         m_output.Rcv.m_integer = m_parent.GetProcessor().PackPlace(place);
                         break;
                     }
@@ -1131,9 +1133,9 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
             else if ((m_input.function & A_UTHREAD_REMOTE_MASK) == A_UTHREAD_REMOTE_VALUE)
             {
                 const FID fid = m_parent.GetProcessor().UnpackFID(Rav);
-				//FT-BEGIN
-				const FID rfid = m_parent.GetProcessor().UnpackFID(Rbv);
-				//FT-END
+                //FT-BEGIN
+                const FID rfid = m_parent.GetProcessor().UnpackFID(Rbv);
+                //FT-END
                 switch (m_input.function)
                 {
                 case A_UTHREAD_SETSTART: return SetFamilyProperty(fid, FAMPROP_START, Rbv);
@@ -1144,10 +1146,10 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                 case A_UTHREAD_PUTS:     return WriteFamilyRegister(RRT_FIRST_DEPENDENT, RT_INTEGER, fid, m_input.regofs); 
                 case A_UTHREAD_DETACH:   return ExecDetach(fid); 
 				
-				//FT-BEGIN
-				case A_UTHREAD_PAIR:     return ExecPair(fid, rfid, m_input.Rc.index);
-				case A_UTHREAD_RMTWR:    return ExecRmtwr(fid);
-				//FT-END
+                //FT-BEGIN
+                case A_UTHREAD_PAIR:     return ExecPair(fid, rfid, m_input.Rc.index);
+                case A_UTHREAD_RMTWR:    return ExecRmtwr(fid);
+                //FT-END
 
                 case A_UTHREAD_SYNC:     return ExecSync(fid);
                 case A_UTHREAD_GETG:     return ReadFamilyRegister(RRT_GLOBAL,      RT_INTEGER, fid, m_input.regofs);
@@ -1160,11 +1162,10 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                 PlaceID place  = m_parent.GetProcessor().UnpackPlace(Rav);
                 bool suspend   = (m_input.function & A_UTHREAD_ALLOC_S_MASK);
                 bool exclusive = (m_input.function & A_UTHREAD_ALLOC_X_MASK);
-				//FT-BEGIN
-				bool redundant = (m_input.function & A_UTHREAD_ALLOC_R_MASK);
-	
-                return ExecAllocate(place, m_input.Rc.index, suspend, exclusive, redundant, flags);
-				//FT-END
+                //FT-BEGIN
+                bool redundant = (m_input.function & A_UTHREAD_ALLOC_R_MASK);
+                //FT-END
+                return ExecAllocate(place, m_input.Rc.index, suspend, exclusive, redundant /*[FT]*/, flags);
             }
             else if ((m_input.function & A_UTHREAD_CREB_MASK) == A_UTHREAD_CREB_VALUE)
             {

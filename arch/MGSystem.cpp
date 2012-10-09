@@ -136,7 +136,7 @@ map<string, Object*> MGSystem::GetComponents(const string& pat)
         string syspat = m_root.GetName() + '.' + pat;
         ::GetComponents(ret, &m_root, syspat);
     }
-    
+
     return ret;
 }
 
@@ -190,7 +190,7 @@ static void PrintComponents(ostream& out, const Object* cur, const string& inden
         if (new_printing && (levels == 0 || cur_level < levels))
         {
             string str = indent + child->GetName();
-            
+
             out << setfill(' ') << setw(30) << left << str << right << " ";
 
             const Inspect::ListCommands *lc = dynamic_cast<const Inspect::ListCommands*>(child);
@@ -241,7 +241,7 @@ void MGSystem::PrintCoreStats(ostream& os) const {
     enum ct types[MAXCOUNTS];
 
     size_t i, j;
-    
+
     memset(c, 0, sizeof(struct dt)*P*MAXCOUNTS);
 
     // Collect the data
@@ -574,18 +574,18 @@ void MGSystem::Step(CycleNo nCycles)
             {
                 switch (process->GetState())
                 {
-                case STATE_DEADLOCK: 
+                case STATE_DEADLOCK:
                     ss << "  " << process->GetName() << endl;
-                    ++num_stalled; 
+                    ++num_stalled;
                     break;
-                case STATE_RUNNING:  
-                    ++num_running; 
+                case STATE_RUNNING:
+                    ++num_running;
                     break;
                 case STATE_ACTIVE:
                     ++num_active;
                     break;
-                default: 
-                    assert(false); 
+                default:
+                    assert(false);
                     break;
                 }
             }
@@ -604,8 +604,8 @@ void MGSystem::Step(CycleNo nCycles)
 
         ss << endl
            << "Deadlock! (at cycle " << m_kernel.GetCycleNo() << ')' << endl
-           << "(" 
-           << num_stalled << " processes stalled; " 
+           << "("
+           << num_stalled << " processes stalled; "
            << num_running << " processes running; "
            << num_active << " processes active; "
            << num_regs << " registers waited on)";
@@ -651,7 +651,7 @@ MGSystem::MGSystem(Config& config,
 
     if (!quiet)
     {
-        clog << endl 
+        clog << endl
              << "Instanciating components..." << endl;
     }
 
@@ -659,12 +659,12 @@ MGSystem::MGSystem(Config& config,
 
     const size_t numProcessorsPerFPU = config.getValue<size_t>("NumProcessorsPerFPU");
     const PSize  numFPUs             = (numProcessors + numProcessorsPerFPU - 1) / numProcessorsPerFPU;
-	
-	//FT-BRGIN
-	assert (numProcessors%2==0);
-	const size_t numCBs = numProcessors / 2;
-	//FT-END
-	
+
+    //FT-BEGIN
+    assert (numProcessors%2==0);
+    const size_t numCBs = numProcessors / 2;
+    //FT-END
+
     string memory_type = config.getValue<string>("MemoryType");
     transform(memory_type.begin(), memory_type.end(), memory_type.begin(), ::toupper);
 
@@ -754,8 +754,8 @@ MGSystem::MGSystem(Config& config,
         clog << numFPUs << " FPUs instantiated." << endl;
     }
 
-	// FT-BEGIN
-	// Create the CBs
+    // FT-BEGIN
+    // Create the CBs
     m_cbs.resize(numCBs);
     for (size_t f = 0; f < numCBs; ++f)
     {
@@ -764,15 +764,15 @@ MGSystem::MGSystem(Config& config,
         leftname << "cpu" << f * 2;
         rightname << "cpu" << f * 2 + 1;
         m_cbs[f] = new CompBuffer(cbname.str(), leftname.str(), rightname.str(), m_root, m_clock, *m_memory, config);
-		
+
         config.registerObject(*m_cbs[f], "cb");
     }
     if (!quiet)
     {
         clog << numCBs << " Comparison Buffers instantiated." << endl;
     }
-	// FT-END
-	
+    // FT-END
+
     // Create processor grid
     m_procs.resize(numProcessors);
     for (size_t i = 0; i < numProcessors; ++i)
@@ -807,7 +807,7 @@ MGSystem::MGSystem(Config& config,
     {
         clog << numProcessors << " cores instantiated." << endl;
     }
-    
+
     // Create the I/O devices
     vector<string> dev_names = extradevs;
     vector<string> cfg_names = config.getWordList("IODevices");
@@ -834,7 +834,7 @@ MGSystem::MGSystem(Config& config,
         {
             throw runtime_error("Device " + name + " set to connect to non-existent bus");
         }
-        
+
         IIOBus& iobus = *m_iobuses[busid];
 
         IODeviceID devid = config.getValueOrDefault<IODeviceID>(m_root, name, "DeviceID", iobus.GetNextAvailableDeviceID());
@@ -898,36 +898,35 @@ MGSystem::MGSystem(Config& config,
 
     if (!quiet)
     {
-        clog << endl 
+        clog << endl
              << "Initializing components..." << endl;
     }
 
     // Initialize the memory
     m_memory->Initialize();
-	//FT-BEGIN
-	// FIXME: Initialize CB here.
-	//FT-END
+    //FT-BEGIN
+    // FIXME: Initialize CB here.
+    //FT-END
 
     // Connect processors in the link
     for (size_t i = 0; i < numProcessors; ++i)
     {
         Processor* prev  = (i == 0)                 ? NULL : m_procs[i - 1];
         Processor* next  = (i == numProcessors - 1) ? NULL : m_procs[i + 1];
-		
-		//FT-BEGIN
-		Processor* prev2 = (i <= 1 )                ? NULL : m_procs[i - 2];
+
+        //FT-BEGIN
+        Processor* prev2 = (i <= 1 )                ? NULL : m_procs[i - 2];
         Processor* next2 = (i >= numProcessors - 2) ? NULL : m_procs[i + 2];
-		
-		Processor* prev3 = (i <= 2)                 ? NULL : m_procs[i - 3];
+
+        Processor* prev3 = (i <= 2)                 ? NULL : m_procs[i - 3];
         Processor* next3 = (i >= numProcessors - 3) ? NULL : m_procs[i + 3];
-		//FT-END
-		
+        //FT-END
+
         m_procs[i]->Initialize(prev3, prev2, prev, next, next2, next3);
         if (next)
             config.registerRelation(*m_procs[i], *next, "link", true);
     }
-    
-	
+
     // Initialize the buses. This initializes the devices as well.
     for (size_t i = 0; i < m_iobuses.size(); ++i)
     {
@@ -955,7 +954,7 @@ MGSystem::MGSystem(Config& config,
 
     if (!quiet)
     {
-        clog << endl 
+        clog << endl
              << "Final configuration..." << endl;
     }
 
@@ -1037,13 +1036,13 @@ MGSystem::~MGSystem()
     {
         delete m_fpus[i];
     }
-	//FT-BEGIN
-	for (size_t i = 0; i < m_cbs.size(); ++i)
-	{
-		delete m_cbs[i];
-	}
-	//FT-END
-	
+    //FT-BEGIN
+    for (size_t i = 0; i < m_cbs.size(); ++i)
+    {
+        delete m_cbs[i];
+    }
+    //FT-END
+
     delete m_selector;
     delete m_memory;
 }

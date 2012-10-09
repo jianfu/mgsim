@@ -80,7 +80,7 @@ namespace Simulator
         return true;
     }
 
-    bool Processor::IODirectCacheAccess::OnMemoryReadCompleted(MemAddr addr, const char * data, MCID)
+    bool Processor::IODirectCacheAccess::OnMemoryReadCompleted(MemAddr addr, const char * data, MCID /*[FT]*/)
     {
         assert(addr % m_lineSize == 0);
 

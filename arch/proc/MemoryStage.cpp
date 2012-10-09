@@ -184,7 +184,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::MemoryStage::OnCycle()
                     else
                     {
                         // Normal read from memory.
-                        result = m_dcache.Read(m_input.address, data, m_input.size, &reg, m_input.tid);
+                        result = m_dcache.Read(m_input.address, data, m_input.size, &reg, m_input.tid /*[FT]*/);
                 
                         switch(result)
                         {

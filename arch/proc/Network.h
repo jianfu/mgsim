@@ -19,17 +19,16 @@ struct RemoteMessage
         MSG_BREAK,          ///< Break
         MSG_RAW_REGISTER,   ///< Raw register response
         MSG_FAM_REGISTER,   ///< Family register request or response
-		//FT-BEGIN
-		MSG_ADDR_REGISTER,  ///< Abosolute register address in 'allocate' of redundant thread
-		MSG_RTHREADCOUNT,    ///< The distance of thread creation between master family and redundant family 
-		MSG_MASTERTID,      ///< The physic matching master tid for redundant thread
-		MSG_PAIR,           ///< Paring the master and redundant family
-		//FT-END
+        //FT-BEGIN
+        MSG_ADDR_REGISTER,  ///< Abosolute register address in 'allocate' of redundant thread
+        MSG_RTHREADCOUNT,   ///< The distance of thread creation between master family and redundant family 
+        MSG_MASTERTID,      ///< The physic matching master tid for redundant thread
+        MSG_PAIR,           ///< Paring the master and redundant family
+        //FT-END
     };
         
     Type type;      ///< Type of the message
 	
-    
 	/// The message contents
     union
     {
@@ -41,9 +40,9 @@ struct RemoteMessage
             PID            completion_pid;///< PID where the thread runs that issued the allocate
             RegIndex       completion_reg;///< Register to write FID back to
             Bundle         bundle;
-			//FT-BEGIN
-			bool redundant; 
-			//FT-END
+            //FT-BEGIN
+            bool           redundant; 
+            //FT-END
         } allocate;
             
         struct {
@@ -96,37 +95,37 @@ struct RemoteMessage
             };
         } famreg;
 		
-		//FT-BEGIN
-		struct
+        //FT-BEGIN
+        struct
         {
-			PID			  pid;
+            PID           pid;
             TID           tid;
             RegIndex      index;
         } addrreg;
-		
-		struct
+
+        struct
         {
-			PID			  pid;
+            PID           pid;
             LFID          lfid;
-			TID           tid; //for debug
+            TID           tid; //for debug
         } rtc;
-		
-		struct
+
+        struct
         {
-			PID			  pid;
+            PID           pid;
             LFID          lfid;
-			TID			  tid;
-			uint64_t      index;
+            TID           tid;
+            uint64_t      index;
         } mtid;
-		
-		struct
+
+        struct
         {
-			FID          mfid;
-			FID	         rfid;
-			RegIndex     completion_reg;
+            FID          mfid;
+            FID          rfid;
+            RegIndex     completion_reg;
             PID          completion_pid;
         } pair;
-		//FT-END
+        //FT-END
     };
 
     std::string str() const;
@@ -145,17 +144,17 @@ struct LinkMessage
         MSG_DETACH,         ///< Detach family
         MSG_BREAK,          ///< Break
         MSG_GLOBAL,         ///< Global register data
-		//FT-BEGIN
-		MSG_PAIR,           ///< Paring the master and redundant family
-		//FT-END
+        //FT-BEGIN
+        MSG_PAIR,           ///< Paring the master and redundant family
+        //FT-END
     };
         
     Type type;      ///< Type of the message
     
-	//FT-BEGIN
-	bool redundant; 
-	//FT-END   
-    
+    //FT-BEGIN
+    bool redundant; 
+    //FT-END   
+
 	/// The message contents
     union
     {
@@ -223,17 +222,17 @@ struct LinkMessage
             RegAddr  addr;
             RegValue value;
         } global;
-		
-		//FT-BEGIN
-		struct
+        
+        //FT-BEGIN
+        struct
         {
             LFID         mlfid;
             LFID         rlfid;
-			RegIndex     completion_reg;
+            RegIndex     completion_reg;
             PID          completion_pid;
-			Integer      first_fid;
+            Integer      first_fid;
         } pair;
-		//FT-END
+        //FT-END
     };
 
     std::string str() const;
@@ -246,15 +245,16 @@ struct AllocResponse
     bool     exact;     ///< If the allocate was exact, unwind all the way
     LFID     prev_fid;  ///< FID of the family on the previous (receiver) core
     LFID     next_fid;  ///< FID of the family on the next (sender) core if !failed
-	LFID     nnext_fid;
-        
+    //FT-BEGIN
+    LFID     nnext_fid;
+    //FT-END
+
     PID      completion_pid; ///< PID where the thread runs that issued the allocate
     RegIndex completion_reg; ///< Reg on parent_pid of the completion register
 	
-	//FT-BEGIN
-	bool redundant; 
-	//FT-END  
-	
+    //FT-BEGIN
+    bool     redundant; 
+    //FT-END  
 };   
 
 class Network : public Object, public Inspect::Interface<Inspect::Read>
@@ -353,7 +353,7 @@ public:
     };
     
     Network(const std::string& name, Processor& parent, Clock& clock, const std::vector<Processor*>& grid, Allocator& allocator, RegisterFile& regFile, FamilyTable& familyTable, Config& config);
-    void Initialize(Network* prev3, Network* prev2, Network* prev, Network* next, Network* next2, Network* next3);
+    void Initialize(Network* prev3, Network* prev2, Network* prev, Network* next, Network* next2, Network* next3); // [FT]
 
     bool SendMessage(const RemoteMessage& msg);
     bool SendMessage(const LinkMessage& msg);
@@ -382,19 +382,17 @@ private:
     Result DoDelegationOut();
     Result DoDelegationIn();
     Result DoSyncs();
-	//FT-BEGIN
-	Result DorLink();
+    //FT-BEGIN
+    Result DorLink();
     Result DorAllocResponse();
-	//FT-END
+    //FT-END
 
     Processor&                     m_parent;
     RegisterFile&                  m_regFile;
     FamilyTable&                   m_familyTable;
     Allocator&                     m_allocator;
-	
-	Network*                       m_prev;
+    Network*                       m_prev;
     Network*                       m_next;
-	
     const std::vector<Processor*>& m_grid;
     unsigned int                   m_loadBalanceThreshold;
 
@@ -412,10 +410,10 @@ public:
 
 
 	
-	//FT-BEGIN
-	RegisterPair<LinkMessage>   m_rlink;           
+    //FT-BEGIN
+    RegisterPair<LinkMessage>   m_rlink;           
     RegisterPair<AllocResponse> m_rallocResponse;  
-	//FT-END
+    //FT-END
 	
     // Synchronizations destined for outgoing delegation network.
     // We need this buffer to break the circular depedency between the
@@ -428,14 +426,12 @@ public:
     Process p_Link;
     Process p_AllocResponse;
    
-	
-	//FT-BEGIN
-	Process p_rLink;
+    //FT-BEGIN
+    Process p_rLink;
     Process p_rAllocResponse;
-	//FT-END
-	
-	 Process p_Syncs;
-	
+    //FT-END
+
+    Process p_Syncs;
 };
 
 #endif

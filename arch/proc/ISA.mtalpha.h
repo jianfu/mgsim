@@ -152,10 +152,10 @@ enum {
     A_UTHREADF_PUTS      = 0x025,
     A_UTHREAD_DETACH     = 0x28,
 
-	//FT-BEGIN
-	A_UTHREAD_PAIR       = 0x29,
-	A_UTHREAD_RMTWR      = 0x2A,
-	//FT-END
+    //FT-BEGIN
+    A_UTHREAD_PAIR       = 0x29,
+    A_UTHREAD_RMTWR      = 0x2A,
+    //FT-END
 	
     /* remote, synchronous */
     A_UTHREAD_SYNC       = 0x30,
@@ -164,7 +164,6 @@ enum {
     A_UTHREAD_GETS       = 0x33,
     A_UTHREADF_GETS      = 0x033,
 
-	
     /* remote, res mgt. */
     A_UTHREAD_ALLOC_MASK  = 0x60,
     A_UTHREAD_ALLOC_VALUE = 0x40,
@@ -175,13 +174,13 @@ enum {
     A_UTHREAD_ALLOCATE_S = 0x41,   // Suspend
     A_UTHREAD_ALLOCATE_E = 0x43,   // Exclusive
 	
-	//FT-BEGIN
-	A_UTHREAD_ALLOC_R_MASK = 0x10,
+    //FT-BEGIN
+    A_UTHREAD_ALLOC_R_MASK = 0x10,
     A_UTHREAD_ALLOCATE_R   = 0x50,   // Redundant allocate
     A_UTHREAD_ALLOCATE_RS  = 0x51,   // Redundant & Suspend allocate
     A_UTHREAD_ALLOCATE_RE  = 0x53,   // Redundant & Exclusive allocate
-	//FT-END
-	
+    //FT-END
+
     A_UTHREAD_CREB_MASK  = 0x60,
     A_UTHREAD_CREB_VALUE = 0x60,
     A_CREATE_B_A         = 0x61,

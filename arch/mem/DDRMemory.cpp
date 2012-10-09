@@ -152,7 +152,9 @@ public:
             return FAILED;
         }
         
+//FT-BEGIN
         if (!request.client->callback->OnMemoryReadCompleted(request.address, request.data.data, 0)) {
+//FT-END
             return FAILED;
         }
         

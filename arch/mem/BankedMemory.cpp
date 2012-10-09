@@ -25,7 +25,9 @@ struct BankedMemory::Request
     MemData     data;
     WClientID   wid;
     CycleNo     done;
-	MCID		mcid;
+    //FT-BEGIN
+    MCID        mcid;
+    //FT-END
 };
 
 class BankedMemory::Bank : public Object
@@ -206,7 +208,6 @@ public:
     
     bool AddIncomingRequest(Request& request)
     {
-		
         if (!p_incoming.Invoke())
         {
             return false;
@@ -304,6 +305,7 @@ MCID BankedMemory::RegisterClient(IMemoryCallback& callback, Process& process, S
     }
 
     m_registry.registerRelation(callback.GetMemoryPeer(), *this, "mem");
+
     return id;
 }
 
@@ -321,7 +323,9 @@ bool BankedMemory::Read(MCID id, MemAddr address)
     assert(address % m_lineSize == 0);
 
     // Client should have been registered
+//FT-BEGIN
     assert((id >> 11)< m_clients.size() && m_clients[id >> 11].callback != NULL);
+//FT-END
 
     size_t bank_index;
     MemAddr unused;
@@ -330,10 +334,14 @@ bool BankedMemory::Read(MCID id, MemAddr address)
 
     Request request;
     request.address   = address;
+//FT-BEGIN
     request.client    = &m_clients[id>>11];
+//FT-END
     request.size      = m_lineSize;
     request.write     = false;
-	request.mcid	  = id;
+//FT-BEGIN
+    request.mcid      = id;
+//FT-END
     
     Bank& bank = *m_banks[ bank_index ];
     if (!bank.AddIncomingRequest(request))

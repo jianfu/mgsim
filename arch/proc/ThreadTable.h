@@ -58,12 +58,11 @@ struct Thread
     LFID         family;
     TID          next;
 	
-	//FT-BEGIN
-	TID          mtid;  //master thread's tid if it is a redundant thread 
-	RegIndex     regIndex;   //register index of Rc in 'allocate' of its corresponding redundant thread
-	bool         cleanupFlag;  //shows the thread is pushed into m_cleanup once or not 
-	//FT-END
-	
+    //FT-BEGIN
+    TID          mtid;  //master thread's tid if it is a redundant thread 
+    RegIndex     regIndex;   //register index of Rc in 'allocate' of its corresponding redundant thread
+    bool         cleanupFlag;  //shows the thread is pushed into m_cleanup once or not 
+    //FT-END
 
     // Architecture specific per-thread stuff
 #if defined(TARGET_MTALPHA)
