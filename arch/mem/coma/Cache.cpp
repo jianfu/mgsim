@@ -58,13 +58,16 @@ bool COMA::Cache::Read(MCID id, MemAddr address)
     Request req;
     req.address = address;
     req.write   = false;
-	//FT-BEGIN
-	req.mcid		= id;
-	//FT-END
+    //FT-BEGIN
+    req.mcid    = id;
+    //FT-END
     
     // Client should have been registered
-	// Here shift number depends on NumThreadEntires.
+
+    //FT-BEGIN
+    // Here shift number depends on NumThreadEntires.
     assert(m_clients[id >> 10] != NULL);
+    //FT-END
 
     if (!m_requests.Push(req))
     {
@@ -398,7 +401,9 @@ bool COMA::Cache::OnMessageReceived(Message* msg)
             }
         }
 
+        //FT-BEGIN
         if (!OnReadCompleted(msg->address, data, msg->mcid))
+        //FT-END
         {
             DeadlockWrite("Unable to notify clients of read completion");
             ++m_numStallingRCompletions;
@@ -547,7 +552,7 @@ bool COMA::Cache::OnMessageReceived(Message* msg)
     return true;
 }
     
-bool COMA::Cache::OnReadCompleted(MemAddr addr, const char * data, MCID mcid)
+bool COMA::Cache::OnReadCompleted(MemAddr addr, const char * data, MCID mcid) //FT
 {
     // Send the completion on the bus
     if (!p_bus.Invoke())
@@ -558,7 +563,9 @@ bool COMA::Cache::OnReadCompleted(MemAddr addr, const char * data, MCID mcid)
     
     for (std::vector<IMemoryCallback*>::const_iterator p = m_clients.begin(); p != m_clients.end(); ++p)
     {
+        //FT-BEGIN
         if (*p != NULL && !(*p)->OnMemoryReadCompleted(addr, data, mcid))
+        //FT-END
         {
             DeadlockWrite("Unable to send read completion to clients");
             return false;
@@ -789,9 +796,9 @@ Result COMA::Cache::OnReadRequest(const Request& req)
             msg->ignore    = false;
             msg->tokens    = 0;
             msg->sender    = m_id;
-			//FT-BEGIN
-			msg->mcid       = req.mcid;
-			//FT-END
+            //FT-BEGIN
+            msg->mcid      = req.mcid;
+            //FT-END
         }
             
         if (!SendMessage(msg, MINSPACE_INSERTION))
@@ -824,7 +831,9 @@ Result COMA::Cache::OnReadRequest(const Request& req)
             ++m_numRFullHits;
         }
 
+        //FT-BEGIN
         if (!OnReadCompleted(req.address, data, req.mcid))
+        //FT-END
         {
             ++m_numStallingRHits;
             DeadlockWrite("Unable to notify clients of read completion");

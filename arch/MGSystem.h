@@ -30,10 +30,10 @@ namespace Simulator {
         std::vector<Object*>        m_devices;
         std::map<size_t, size_t>    m_procbusmapping;
 
-		//FT-BEGIN
-		std::vector<CompBuffer*>	m_cbs;
-		//FT-END
-		
+        //FT-BEGIN
+        std::vector<CompBuffer*>    m_cbs;
+        //FT-END
+
         SymbolTable                 m_symtable;
         BreakPointManager           m_breakpoints;
         IMemoryAdmin*               m_memory;

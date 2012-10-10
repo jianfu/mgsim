@@ -42,7 +42,9 @@ private:
         MemAddr      address;
         unsigned int client;
         WClientID    wid;
-		MCID		mcid;
+        //FT-BEGIN
+        MCID         mcid;
+        //FT-END
     };
 
     IBankSelector&                m_selector;

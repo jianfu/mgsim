@@ -319,12 +319,12 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
         PipeAction SetFamilyProperty(const FID& fid, FamilyProperty property, Integer value);
         PipeAction ExecuteInstruction();
         PipeAction ExecBundle(MemAddr addr, bool indirect, Integer value, RegIndex reg);
-		//FT-BEGIN
-        PipeAction ExecAllocate(PlaceID place, RegIndex reg, bool suspend, bool exclusive, bool redundant, Integer flags);
+        PipeAction ExecAllocate(PlaceID place, RegIndex reg, bool suspend, bool exclusive, bool redundant/*[FT]*/, Integer flags);
+        //FT-BEGIN
      	PipeAction ExecPair(const FID& fid, const FID& rfid, RegIndex reg);
-		PipeAction ExecRmtwr(const FID& fid);
-		//FT-END
-		PipeAction ExecCreate(const FID& fid, MemAddr address, RegIndex completion);
+        PipeAction ExecRmtwr(const FID& fid);
+        //FT-END
+        PipeAction ExecCreate(const FID& fid, MemAddr address, RegIndex completion);
         PipeAction ExecBreak();
         void       ExecDebug(Integer value, Integer stream) const;
         void       ExecDebug(double value, Integer stream) const;

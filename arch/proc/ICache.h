@@ -74,7 +74,7 @@ public:
     bool   Read(CID cid, MemAddr address, void* data, MemSize size) const;
     bool   ReleaseCacheLine(CID bid);
     bool   IsEmpty() const;
-    bool   OnMemoryReadCompleted(MemAddr addr, const char* data, MCID);
+    bool   OnMemoryReadCompleted(MemAddr addr, const char* data, MCID /*[FT]*/);
     bool   OnMemoryWriteCompleted(TID tid);
     bool   OnMemorySnooped(MemAddr addr, const char* data, const bool* mask);
     bool   OnMemoryInvalidated(MemAddr addr);

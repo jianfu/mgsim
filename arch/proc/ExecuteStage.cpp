@@ -151,7 +151,6 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecBundle(Me
     return PIPE_CONTINUE;
 }
 
-//FT-BEGIN
 Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecAllocate(PlaceID place, RegIndex reg, bool suspend, bool exclusive, bool redundant, Integer flags)
 {
     if (place.size == 0)
@@ -205,59 +204,61 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecAllocate(
     // Send an allocation request.
     // This will write back the FID to the specified register once the allocation
     // has completed. Even for creates to this core, we do this. Simplifies things.
-    
-	//FT-BEGIN
+
+    //FT-BEGIN
     const Family& family = m_familyTable[m_input.fid];
-	const Thread& thread = m_threadTable[m_input.tid];
-	
-	//!family.redundant &  redundant    --- send to 2nd core of place
-	//!family.redundant & !redundant    --- normal
-	// family.redundant &  redundant    --- nop
-	// family.redundant & !redundant    --- pending Rc, send Rc's absolute address to master thread
-	
-	if (!family.redundant)  //master thread
-	{	
-		if (redundant) //allocate/r 
-			place.pid = place.pid+1-(place.pid%2)*2;
-		
-		//printf("Master: C%u, F%u, T%u, R%u\n", (unsigned)m_parent.GetProcessor().GetPID(), (unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned)redundant);
-		//both allocate/r and allocate
-		COMMIT
-		{
-			m_output.Rrc.type = RemoteMessage::MSG_ALLOCATE;
-			m_output.Rrc.allocate.place          = place;
-			m_output.Rrc.allocate.suspend        = suspend;
-			m_output.Rrc.allocate.exclusive      = exclusive;
-			m_output.Rrc.allocate.type           = type;
-			m_output.Rrc.allocate.completion_pid = m_parent.GetProcessor().GetPID();
-			m_output.Rrc.allocate.completion_reg = reg;
-			
-			m_output.Rrc.allocate.redundant      = redundant;
-			
-			m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
-		}
-	}
-	else                //redundant thread
-	{
-		if (!redundant)  //allocate
-			COMMIT
-			{
-				m_output.Rrc.type = RemoteMessage::MSG_ADDR_REGISTER;
-				m_output.Rrc.addrreg.pid             = m_parent.GetProcessor().GetPID()+1-(m_parent.GetProcessor().GetPID()%2)*2;
-				m_output.Rrc.addrreg.tid             = thread.mtid;
-				m_output.Rrc.addrreg.index           = reg;
-				
-				
-				m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
-			}
-			
-		//nop for allocate/r
-	}
-	//FT-END
+    const Thread& thread = m_threadTable[m_input.tid];
+
+    //!family.redundant &  redundant    --- send to 2nd core of place
+    //!family.redundant & !redundant    --- normal
+    // family.redundant &  redundant    --- nop
+    // family.redundant & !redundant    --- pending Rc, send Rc's absolute address to master thread
+
+    if (!family.redundant)  //master thread
+    {
+        if (redundant) //allocate/r
+            place.pid = place.pid+1-(place.pid%2)*2;
+
+        //printf("Master: C%u, F%u, T%u, R%u\n", (unsigned)m_parent.GetProcessor().GetPID(), (unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned)redundant);
+        //both allocate/r and allocate
+    //FT-END
+
+        COMMIT
+        {
+            m_output.Rrc.type = RemoteMessage::MSG_ALLOCATE;
+            m_output.Rrc.allocate.place          = place;
+            m_output.Rrc.allocate.suspend        = suspend;
+            m_output.Rrc.allocate.exclusive      = exclusive;
+            m_output.Rrc.allocate.type           = type;
+            m_output.Rrc.allocate.completion_pid = m_parent.GetProcessor().GetPID();
+            m_output.Rrc.allocate.completion_reg = reg;
+
+            //FT-BEGIN
+            m_output.Rrc.allocate.redundant      = redundant;
+            //FT-END
+
+            m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
+        }
+    }
+    //FT-BEGIN
+    else                //redundant thread
+    {
+        if (!redundant)  //allocate
+            COMMIT
+            {
+                m_output.Rrc.type           = RemoteMessage::MSG_ADDR_REGISTER;
+                m_output.Rrc.addrreg.pid    = m_parent.GetProcessor().GetPID()+1-(m_parent.GetProcessor().GetPID()%2)*2;
+                m_output.Rrc.addrreg.tid    = thread.mtid;
+                m_output.Rrc.addrreg.index  = reg;
+
+                m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
+            }
+
+        //nop for allocate/r
+    }
+    //FT-END
     return PIPE_CONTINUE;
 }
-
-//FT-END
 
 Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::SetFamilyProperty(const FID& fid, FamilyProperty property, Integer value)
 {
@@ -380,56 +381,58 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecSync(cons
 //FT-BEGIN
 Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecRmtwr(const FID& fid)
 {
-	const Family& family = m_familyTable[m_input.fid];
-	const Thread& thread = m_threadTable[m_input.tid];
-	
-	if (!family.redundant) //master thread
-	COMMIT
-		{
-			m_output.Rrc.type = RemoteMessage::MSG_RAW_REGISTER;
-			m_output.Rrc.rawreg.pid               = m_parent.GetProcessor().GetPID()+1-(m_parent.GetProcessor().GetPID()%2)*2;
-			m_output.Rrc.rawreg.addr              = MAKE_REGADDR(RT_INTEGER, thread.regIndex);
-			m_output.Rrc.rawreg.value.m_state     = RST_FULL;
-			m_output.Rrc.rawreg.value.m_integer   = m_parent.GetProcessor().PackFID(fid);
-			
-		}
+    const Family& family = m_familyTable[m_input.fid];
+    const Thread& thread = m_threadTable[m_input.tid];
+
+    if (!family.redundant) //master thread
+    {
+        COMMIT
+        {
+            m_output.Rrc.type                   = RemoteMessage::MSG_RAW_REGISTER;
+            m_output.Rrc.rawreg.pid             = m_parent.GetProcessor().GetPID()+1-(m_parent.GetProcessor().GetPID()%2)*2;
+            m_output.Rrc.rawreg.addr            = MAKE_REGADDR(RT_INTEGER, thread.regIndex);
+            m_output.Rrc.rawreg.value.m_state   = RST_FULL;
+            m_output.Rrc.rawreg.value.m_integer = m_parent.GetProcessor().PackFID(fid);
+
+        }
+    }
     return PIPE_CONTINUE;
 }
 
 Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecPair(const FID& mfid, const FID& rfid, RegIndex reg)
 {
-	const Family& family = m_familyTable[m_input.fid];
-	
-	//master thread
-	if(!family.redundant)
-	{
-		// Check these two FIDs
-		if ((mfid.pid == 0 && mfid.lfid == 0 && mfid.capability == 0) || (rfid.pid == 0 && rfid.lfid == 0 && rfid.capability == 0))
-		{
-			COMMIT
-			{
-				m_output.Rcv.m_integer = 0;
-				m_output.Rcv.m_state   = RST_FULL;
-			}
-		}
-		else
-		// Send the pair.
-		COMMIT
-		{
-			m_output.Rrc.type = RemoteMessage::MSG_PAIR;
-			m_output.Rrc.pair.mfid             = mfid;
-			m_output.Rrc.pair.rfid             = rfid;
-			m_output.Rrc.pair.completion_reg   = reg;
-			m_output.Rrc.pair.completion_pid   = m_parent.GetProcessor().GetPID();
-			
-			m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
-		}
-	}
-    
+    const Family& family = m_familyTable[m_input.fid];
+
+    //master thread
+    if(!family.redundant)
+    {
+        // Check these two FIDs
+        if ((mfid.pid == 0 && mfid.lfid == 0 && mfid.capability == 0) || (rfid.pid == 0 && rfid.lfid == 0 && rfid.capability == 0))
+        {
+            COMMIT
+            {
+                m_output.Rcv.m_integer = 0;
+                m_output.Rcv.m_state   = RST_FULL;
+            }
+        }
+        else
+        {
+            // Send the pair.
+            COMMIT
+            {
+                m_output.Rrc.type = RemoteMessage::MSG_PAIR;
+                m_output.Rrc.pair.mfid             = mfid;
+                m_output.Rrc.pair.rfid             = rfid;
+                m_output.Rrc.pair.completion_reg   = reg;
+                m_output.Rrc.pair.completion_pid   = m_parent.GetProcessor().GetPID();
+
+                m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
+            }
+        }
+    }
+
     return PIPE_CONTINUE;
 }
-
-
 //FT-END
 
 Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecDetach(const FID& fid)

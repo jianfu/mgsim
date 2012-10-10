@@ -19,7 +19,9 @@ namespace Simulator
           m_regs(regs),
           m_loads(loads),
           m_cpu(NULL),
-		  m_cpu1(NULL),//FT
+//FT-BEGIN
+          m_cpu1(NULL),
+//FT-END
           m_rom(NULL),
           m_romid(0),
           m_enable_boot(config.getValue<bool>(*this, "BootProcessor")),
@@ -56,20 +58,20 @@ namespace Simulator
 
         m_cpu = & cpu_if->GetProcessor();
 		
-		//FT-BEGIN
-		//Linked redundant processor
-		
+        //FT-BEGIN
+        //Linked redundant processor
+	
         Processor::IOBusInterface *cpu_if1 = dynamic_cast<Processor::IOBusInterface*>(& iobus.GetDeviceByName(config.getValue<string>(*this, "LinkedProcessor1") + ".io_if.bus_if"));
         if (cpu_if1 == NULL)
         {
             throw exceptf<InvalidArgumentException>(*this, "LinkedProcessor1 does not name a processor");
         }
-		
+	
         m_cpu1 = & cpu_if1->GetProcessor();
-		//FT-END
-		
+        //FT-END
+	
         // component processes 
-
+        
         m_start_dca.Sensitive(p_StartDCA);
         m_doboot.Sensitive(p_Boot);
     }
@@ -101,9 +103,9 @@ namespace Simulator
         }
 
         m_cpu->GetIOInterface()->Initialize(m_devid);
-		//FT-BEGIN
-		m_cpu1->GetIOInterface()->Initialize(m_devid);
-		//FT-END
+        //FT-BEGIN
+        m_cpu1->GetIOInterface()->Initialize(m_devid);
+        //FT-END
 		
         if (m_enable_dca)
         {
@@ -146,9 +148,10 @@ namespace Simulator
             bool legacy;
             m_rom->GetBootInfo(prog_start, legacy);
             m_cpu->Boot(prog_start, legacy, m_cpu->GetGridSize(), m_cpu->GetDeviceBaseAddress(m_devid));
-			//FT-BEGIN
-			m_cpu1->Boot(prog_start, legacy, m_cpu1->GetGridSize(), m_cpu1->GetDeviceBaseAddress(m_devid));
-			//FT-END
+            //FT-BEGIN
+            m_cpu1->Boot(prog_start, legacy, m_cpu1->GetGridSize(), m_cpu1->GetDeviceBaseAddress(m_devid));
+            //FT-END
+
             // Fill initial registers
             for (size_t i = 0; i < m_loads.size(); ++i)
             {
@@ -157,12 +160,16 @@ namespace Simulator
                 val.m_integer = m_cpu->GetDeviceBaseAddress(m_iobus.GetDeviceIDByName(m_loads[i].second));
                 val.m_state = RST_FULL;
                 m_cpu->WriteRegister(reg, val);
-				m_cpu1->WriteRegister(reg, val); //FT
+                //FT-BEGIN
+                m_cpu1->WriteRegister(reg, val);
+                //FT-END
             }
             for (size_t i = 0; i < m_regs.size(); ++i)
             {
                 m_cpu->WriteRegister(m_regs[i].first, m_regs[i].second);
-				m_cpu1->WriteRegister(m_regs[i].first, m_regs[i].second); //FT
+                //FT-BEGIN
+                m_cpu1->WriteRegister(m_regs[i].first, m_regs[i].second); //FT
+                //FT-END
             }
         }
         m_doboot.Clear();

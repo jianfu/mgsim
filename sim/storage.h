@@ -192,14 +192,14 @@ public:
         return m_head;
     }
 	
-	//FT-BEGIN
-	/// Returns the last index on the list
-	const T& End() const {
+    //FT-BEGIN
+    /// Returns the last index on the list
+    const T& End() const {
         assert(!m_empty);
         return m_tail;
     }
-	//FT-END
-    
+    //FT-END
+
     /// Pushes the item on the back of the list
     void Push(const T& item)
     {

@@ -192,7 +192,7 @@ void Processor::FamilyTable::Cmd_Read(ostream& out, const vector<string>& argume
     }
     else
     {
-        out << "    |     Initial PC     | Allocated | Threads | P/A/D/Rd |  Cores  | Link | nLink |    Sync    |     Capability     | State         |   Symbol  | redundant | rthreadCount | corr_fid | broken" << endl;
+        out << "    |     Initial PC     | Allocated | Threads | P/A/D/Rd |  Cores  | Link | nLink |    Sync    |     Capability     | State         |   Symbol  | redundant | rthreadCount | corr_fid | broken" << endl; // [FT] 
         out << "----+--------------------+-----------+---------+----------+---------+------+-------+------------+--------------------+---------------+-----------+-----------+--------------+----------+--------" << endl;
 
         for (set<LFID>::const_iterator p = fids.begin(); p != fids.end(); ++p)
@@ -202,7 +202,7 @@ void Processor::FamilyTable::Cmd_Read(ostream& out, const vector<string>& argume
             out << dec << right << setw(3) << setfill(' ') << *p << " | ";
             if (family.state == FST_EMPTY)
             {
-                out << "                   |           |         |          |         |      |      |            |                    |               |           |           |              |          |";
+                out << "                   |           |         |          |         |      |      |            |                    |               |           |           |              |          |"; // [FT]
             }
             else
             {
@@ -243,13 +243,15 @@ void Processor::FamilyTable::Cmd_Read(ostream& out, const vector<string>& argume
                 } else {
                     out << "  - ";
                 }
-				
-				out <<" | " << setfill('0') << right;
+			
+                //FT-BEGIN
+                out <<" | " << setfill('0') << right;
                 if (family.nlink != INVALID_LFID) {
                     out << " F" << setw(2) << family.nlink;
                 } else {
                     out << "  - ";
                 }
+                //FT-END
             
                 // Print sync reg
                 if (family.sync.pid != INVALID_PID) {
@@ -269,12 +271,14 @@ void Processor::FamilyTable::Cmd_Read(ostream& out, const vector<string>& argume
                     out << m_parent.GetSymbolTable()[family.pc];
                 }
 
-					out << left << setw (6) << " | ";
-				
-				out << left << setw (6) << setfill(' ') << family.redundant 
-					<< " | " << left << setw(12) << setfill(' ') << family.rthreadCount
-					<< " | " << left << setw(10) << setfill(' ') << dec << (int)family.corr_fid
-					<< " | " << left << setw(8) << setfill(' ') << family.broken;
+                //FT-BEGIN
+                out << left << setw (6) << " | ";
+		
+                out << left << setw (6) << setfill(' ') << family.redundant 
+                    << " | " << left << setw(12) << setfill(' ') << family.rthreadCount
+                    << " | " << left << setw(10) << setfill(' ') << dec << (int)family.corr_fid
+                    << " | " << left << setw(8) << setfill(' ') << family.broken;
+                //FT-END
             }
             out << endl;
         }
