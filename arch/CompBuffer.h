@@ -75,8 +75,9 @@ namespace Simulator
 		
 		ComponentModelRegistry&     		m_registry;
 		
-		ArbitratedService<PriorityCyclicArbitratedPort>					p_service;
-		//ArbitratedService<>					p_service;
+		//ArbitratedService<PriorityCyclicArbitratedPort>					p_service;
+		//ArbitratedService<CyclicArbitratedPort>					p_service;
+		ArbitratedService<>					p_service;
 		
 	public:
 		
