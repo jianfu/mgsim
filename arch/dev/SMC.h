@@ -36,11 +36,12 @@ namespace Simulator
         SingleFlag m_doboot;
 
     public:
-        SMC(const std::string& name, Object& parent, IIOBus& iobus, IODeviceID devid, 
+        SMC(const std::string& name, Object& parent, IIOBus& iobus, IODeviceID devid,
             const std::vector<std::pair<RegAddr, RegValue> >& regs,
             const std::vector<std::pair<RegAddr, std::string> >& loads,
             Config& config);
-
+        SMC(const SMC&) = delete;
+        SMC& operator=(const SMC&) = delete;
         ~SMC();
 
         void Initialize();
@@ -53,12 +54,12 @@ namespace Simulator
 
         bool OnReadRequestReceived(IODeviceID from, MemAddr address, MemSize size);
         bool OnNotificationReceived(IONotificationChannelID which, Integer tag);
-        
+
         StorageTraceSet GetNotificationTraces() const;
 
         void GetDeviceIdentity(IODeviceIdentification& id) const;
         std::string GetIODeviceName() const;
-        
+
 
     };
 

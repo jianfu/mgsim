@@ -16,7 +16,7 @@ class ComponentModelRegistry;
 namespace Simulator
 {
 
-class COMA : public Object, public VirtualMemory, public Inspect::Interface<Inspect::Line|Inspect::Trace>
+class COMA : public Object, public IMemory, public VirtualMemory, public Inspect::Interface<Inspect::Line|Inspect::Trace>
 {
 public:
     class Node;
@@ -25,14 +25,14 @@ public:
     class Directory;
     class RootDirectory;
     class Cache;
-    
+
     // A simple base class for all COMA objects. It keeps track of what
     // COMA memory it's in.
     class Object : public virtual Simulator::Object
     {
     protected:
         COMA& m_parent;
-        
+
     public:
         Object(const std::string& name, COMA& parent)
             : Simulator::Object(name, parent), m_parent(parent) {}
@@ -42,7 +42,7 @@ public:
 protected:
     typedef std::set<MemAddr> TraceMap;
     typedef size_t            CacheID;
-    
+
     ComponentModelRegistry&     m_registry;
     size_t                      m_numClientsPerCache;
     size_t                      m_numCachesPerLowRing;
@@ -55,20 +55,22 @@ protected:
     std::vector<RootDirectory*> m_roots;              ///< List of root directories
     TraceMap                    m_traces;             ///< Active traces
     DDRChannelRegistry          m_ddr;                ///< List of DDR channels
-    
+
     std::vector<std::pair<Cache*,MCID> > m_clientMap; ///< Mapping of MCID to caches
 
     uint64_t                    m_nreads, m_nwrites, m_nread_bytes, m_nwrite_bytes;
-    
+
     unsigned int GetTotalTokens() const {
         // One token per cache
         return m_caches.size();
     }
-    
+
     virtual void Initialize() = 0;
-    
+
 public:
     COMA(const std::string& name, Simulator::Object& parent, Clock& clock, Config& config);
+    COMA(const COMA&) = delete;
+    COMA& operator=(const COMA&) = delete;
     ~COMA();
 
     const TraceMap& GetTraces() const { return m_traces; }
@@ -76,7 +78,7 @@ public:
     IBankSelector& GetBankSelector() const { return *m_selector; }
 
     size_t GetLineSize() const { return m_lineSize; }
-    size_t GetNumClientsPerCache() const { return m_numClientsPerCache; }    
+    size_t GetNumClientsPerCache() const { return m_numClientsPerCache; }
     size_t GetNumCachesPerLowRing() const { return m_numCachesPerLowRing; }
     size_t GetNumCaches() const { return m_caches.size(); }
     size_t GetNumDirectories() const { return m_directories.size(); }
@@ -84,20 +86,22 @@ public:
     size_t GetNumCacheSets() const;
     size_t GetCacheAssociativity() const;
     size_t GetDirectoryAssociativity() const;
-    
+
     // IMemory
-    virtual MCID RegisterClient(IMemoryCallback& callback, Process& process, StorageTraceSet& traces, Storage& storage, bool grouped) = 0;
-    void UnregisterClient(MCID id);
-    bool Read (MCID id, MemAddr address);
-    bool Write(MCID id, MemAddr address, const MemData& data, WClientID wid);
+    virtual MCID RegisterClient(IMemoryCallback& callback, Process& process, StorageTraceSet& traces, Storage& storage, bool grouped) override = 0;
+    void UnregisterClient(MCID id) override;
+    using VirtualMemory::Read;
+    using VirtualMemory::Write;
+    bool Read (MCID id, MemAddr address) override;
+    bool Write(MCID id, MemAddr address, const MemData& data, WClientID wid) override;
 
-    void GetMemoryStatistics(uint64_t& nreads, uint64_t& nwrites, 
+    void GetMemoryStatistics(uint64_t& nreads, uint64_t& nwrites,
                              uint64_t& nread_bytes, uint64_t& nwrite_bytes,
-                             uint64_t& nreads_ext, uint64_t& nwrites_ext) const;
+                             uint64_t& nreads_ext, uint64_t& nwrites_ext) const override;
 
-    void Cmd_Info (std::ostream& out, const std::vector<std::string>& arguments) const;
-    void Cmd_Line (std::ostream& out, const std::vector<std::string>& arguments) const;
-    void Cmd_Trace(std::ostream& out, const std::vector<std::string>& arguments);
+    void Cmd_Info (std::ostream& out, const std::vector<std::string>& arguments) const override;
+    void Cmd_Line (std::ostream& out, const std::vector<std::string>& arguments) const override;
+    void Cmd_Trace(std::ostream& out, const std::vector<std::string>& arguments) override;
 };
 
 class OneLevelCOMA : public COMA
@@ -105,7 +109,7 @@ class OneLevelCOMA : public COMA
 public:
     void Initialize();
 
-    MCID RegisterClient(IMemoryCallback& callback, Process& process, StorageTraceSet& traces, Storage& storage, bool grouped);
+    MCID RegisterClient(IMemoryCallback& callback, Process& process, StorageTraceSet& traces, Storage& storage, bool grouped) override;
 
     OneLevelCOMA(const std::string& name, Simulator::Object& parent, Clock& clock, Config& config);
 };
@@ -115,7 +119,7 @@ class TwoLevelCOMA : public COMA
 public:
     void Initialize();
 
-    MCID RegisterClient(IMemoryCallback& callback, Process& process, StorageTraceSet& traces, Storage& storage, bool grouped);
+    MCID RegisterClient(IMemoryCallback& callback, Process& process, StorageTraceSet& traces, Storage& storage, bool grouped) override;
 
     TwoLevelCOMA(const std::string& name, Simulator::Object& parent, Clock& clock, Config& config);
 };

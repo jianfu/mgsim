@@ -17,7 +17,7 @@ namespace Simulator
 
 class ArbitratedWriteFunction;
 
-class BankedMemory : public Object, public VirtualMemory
+class BankedMemory : public Object, public IMemory, public VirtualMemory
 {
     struct ClientInfo;
     struct Request;
@@ -27,14 +27,16 @@ class BankedMemory : public Object, public VirtualMemory
     CycleNo                     GetMemoryDelay (size_t data_size) const;
 
     // IMemory
-    MCID RegisterClient(IMemoryCallback& callback, Process& process, StorageTraceSet& traces, Storage& storage, bool /*ignored*/);
-    void UnregisterClient(MCID id);
-    bool Read (MCID id, MemAddr address);
-    bool Write(MCID id, MemAddr address, const MemData& data, WClientID wid);
+    MCID RegisterClient(IMemoryCallback& callback, Process& process, StorageTraceSet& traces, Storage& storage, bool /*ignored*/) override;
+    void UnregisterClient(MCID id) override;
+    using VirtualMemory::Read;
+    using VirtualMemory::Write;
+    bool Read (MCID id, MemAddr address) override;
+    bool Write(MCID id, MemAddr address, const MemData& data, WClientID wid) override;
 
-    void GetMemoryStatistics(uint64_t& nreads, uint64_t& nwrites, 
+    void GetMemoryStatistics(uint64_t& nreads, uint64_t& nwrites,
                              uint64_t& nread_bytes, uint64_t& nwrite_bytes,
-                             uint64_t& nreads_ext, uint64_t& nwrites_ext) const
+                             uint64_t& nreads_ext, uint64_t& nwrites_ext) const override
     {
         nreads = m_nreads;
         nwrites = m_nwrites;
@@ -42,7 +44,7 @@ class BankedMemory : public Object, public VirtualMemory
         nwrite_bytes = m_nwrite_bytes;
         nreads_ext = m_nreads;
         nwrites_ext = m_nwrites;
-    }	
+    }
 
 protected:
     ComponentModelRegistry& m_registry;
@@ -53,7 +55,6 @@ protected:
     CycleNo                 m_baseRequestTime;
     CycleNo                 m_timePerLine;
     size_t                  m_lineSize;
-    BufferSize              m_bufferSize;
     IBankSelector*          m_selector;
 
     uint64_t m_nreads;
@@ -63,11 +64,13 @@ protected:
 
 public:
     BankedMemory(const std::string& name, Object& parent, Clock& clock, Config& config, const std::string& defaultBankSelectorType);
+    BankedMemory(const BankedMemory&) = delete;
+    BankedMemory& operator=(const BankedMemory&) = delete;
     ~BankedMemory();
-    
+
     // Debugging
-    void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const;
-    void Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const;
+    void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;
+    void Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const override;
 };
 
 }

@@ -34,13 +34,13 @@ namespace Simulator
         iobus.RegisterClient(devid, *this);
 
         // Linked ROM
-        
+
         m_rom = dynamic_cast<ActiveROM*>(& iobus.GetDeviceByName(config.getValue<string>(*this, "LinkedROM")));
         if (m_rom == NULL)
         {
             throw exceptf<InvalidArgumentException>(*this, "LinkedROM does not name a ROM device");
         }
-        
+
         if (!m_rom->IsPreloaded())
         {
             m_enable_dca = true;
@@ -57,7 +57,7 @@ namespace Simulator
         }
 
         m_cpu = & cpu_if->GetProcessor();
-		
+
         //FT-BEGIN
         //Linked redundant processor
 	
@@ -70,8 +70,8 @@ namespace Simulator
         m_cpu1 = & cpu_if1->GetProcessor();
         //FT-END
 	
-        // component processes 
-        
+        // component processes
+
         m_start_dca.Sensitive(p_StartDCA);
         m_doboot.Sensitive(p_Boot);
     }
@@ -99,14 +99,14 @@ namespace Simulator
             m_iobus.GetDeviceIdentity(i, id);
             SerializeRegister(RT_INTEGER, id.provider, m_enumdata + (i + 1) * 8, 2);
             SerializeRegister(RT_INTEGER, id.model,    m_enumdata + (i + 1) * 8 + 2, 2);
-            SerializeRegister(RT_INTEGER, id.revision, m_enumdata + (i + 1) * 8 + 4, 2);            
+            SerializeRegister(RT_INTEGER, id.revision, m_enumdata + (i + 1) * 8 + 4, 2);
         }
 
         m_cpu->GetIOInterface()->Initialize(m_devid);
         //FT-BEGIN
         m_cpu1->GetIOInterface()->Initialize(m_devid);
         //FT-END
-		
+
         if (m_enable_dca)
         {
             m_start_dca.Set();
@@ -115,9 +115,9 @@ namespace Simulator
         {
             m_doboot.Set();
         }
-        
+
         p_StartDCA.SetStorageTraces(m_iobus.GetWriteRequestTraces());
-        
+
         p_Boot.SetStorageTraces(StorageTrace());
     }
 
@@ -153,22 +153,22 @@ namespace Simulator
             //FT-END
 
             // Fill initial registers
-            for (size_t i = 0; i < m_loads.size(); ++i)
+            for (auto& l : m_loads)
             {
-                RegAddr reg = m_loads[i].first;
+                RegAddr reg = l.first;
                 RegValue val;
-                val.m_integer = m_cpu->GetDeviceBaseAddress(m_iobus.GetDeviceIDByName(m_loads[i].second));
+                val.m_integer = m_cpu->GetDeviceBaseAddress(m_iobus.GetDeviceIDByName(l.second));
                 val.m_state = RST_FULL;
                 m_cpu->WriteRegister(reg, val);
                 //FT-BEGIN
                 m_cpu1->WriteRegister(reg, val);
                 //FT-END
             }
-            for (size_t i = 0; i < m_regs.size(); ++i)
+            for (auto& r : m_regs)
             {
-                m_cpu->WriteRegister(m_regs[i].first, m_regs[i].second);
+                m_cpu->WriteRegister(r.first, r.second);
                 //FT-BEGIN
-                m_cpu1->WriteRegister(m_regs[i].first, m_regs[i].second); //FT
+                m_cpu1->WriteRegister(r.first, r.second); //FT
                 //FT-END
             }
         }
@@ -196,7 +196,7 @@ namespace Simulator
     {
         return opt(m_doboot);
     }
-    
+
     bool SMC::OnReadRequestReceived(IODeviceID from, MemAddr address, MemSize size)
     {
         if (address + size > m_size)
@@ -220,12 +220,12 @@ namespace Simulator
         if (!DeviceDatabase::GetDatabase().FindDeviceByName("MGSim", "SMC", id))
         {
             throw InvalidArgumentException(*this, "Device identity not registered");
-        }    
+        }
     }
 
-    std::string SMC::GetIODeviceName() const 
-    { 
-        return GetFQN(); 
+    std::string SMC::GetIODeviceName() const
+    {
+        return GetFQN();
     }
 
 
