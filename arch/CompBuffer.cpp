@@ -480,10 +480,6 @@ Result CompBuffer::DoTransfer()
     return SUCCESS;
 }
 
-Result CompBuffer::DoNop()
-{
-    return SUCCESS;
-}
 
 void CompBuffer::Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const
 {
@@ -493,6 +489,73 @@ void CompBuffer::Cmd_Read(std::ostream& out, const std::vector<std::string>& arg
         compBuffer = &m_compBuffer0;
     else if (arguments[0] == "right")
         compBuffer = &m_compBuffer1;
+	else if (arguments[0] == "buffers")
+	{
+		out << endl << "Outgoing requests:" << endl << endl
+			<< "      Address      | Type  | Value (writes)" << endl
+			<< "-------------------+-------+-------------------------" << endl;
+		for (Buffer<Request>::const_iterator p = m_outgoing.begin(); p != m_outgoing.end(); ++p)
+		{
+			out << hex << "0x" << setw(16) << setfill('0') << p->address << " | "
+				<< (p->write ? "Write" : "Read ") << " |";
+			if (p->write)
+			{
+				out << hex << setfill('0');
+				for (size_t x = 0; x < m_lineSize; ++x)
+				{
+					if (p->data.mask[x])
+						out << " " << setw(2) << (unsigned)(unsigned char)p->data.data[x];
+					else
+						out << " --";
+				}
+			}
+			out << dec << endl;
+		}
+		
+		out << endl << "Transfer requests:" << endl << endl
+			<< "      Address      | Type  | Value (writes)" << endl
+			<< "-------------------+-------+-------------------------" << endl;
+		for (Buffer<Request>::const_iterator p = m_transfer.begin(); p != m_transfer.end(); ++p)
+		{
+			out << hex << "0x" << setw(16) << setfill('0') << p->address << " | "
+				<< (p->write ? "Write" : "Read ") << " |";
+			if (p->write)
+			{
+				out << hex << setfill('0');
+				for (size_t x = 0; x < m_lineSize; ++x)
+				{
+					if (p->data.mask[x])
+						out << " " << setw(2) << (unsigned)(unsigned char)p->data.data[x];
+					else
+						out << " --";
+				}
+			}
+			out << dec << endl;
+		}
+		
+		out << endl << "Incoming responses:" << endl << endl
+			<< "      Address      | Type  | Value (writes)" << endl
+			<< "-------------------+-------+-------------------------" << endl;
+		for (Buffer<Response>::const_iterator p = m_incoming.begin(); p != m_incoming.end(); ++p)
+		{
+			out << hex << "0x" << setw(16) << setfill('0') << p->address << " | "
+				<< ((p->type == WRITE) ? "Write" : "Read ") << " |";
+			if (p->type == WRITE)
+			{
+				out << hex << setfill('0');
+				for (size_t x = 0; x < m_lineSize; ++x)
+				{
+					if (p->data.mask[x])
+						out << " " << setw(2) << (unsigned)(unsigned char)p->data.data[x];
+					else
+						out << " --";
+				}
+			}
+			out << dec << endl;
+		}
+		
+		return;
+	}
     else
     {
         out << "Please identify which buffer you want to read, left or right?" << endl;

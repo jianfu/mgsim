@@ -97,7 +97,6 @@ namespace Simulator
         Result DoOutgoing();
         Result DoIncoming();
         Result DoTransfer();
-        Result DoNop();
 
         MCID RegisterClient  (IMemoryCallback& callback, Process& process, StorageTraceSet& traces, Storage& storage, bool grouped);
         void UnregisterClient(MCID /*id*/){}
@@ -119,6 +118,5 @@ namespace Simulator
                    IMemory& memory, Config& config);
         ~CompBuffer(){}
     };
-
 }
 #endif
