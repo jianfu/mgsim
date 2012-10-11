@@ -96,6 +96,8 @@ COMMON_SRC = \
         arch/BankSelector.cpp \
 	arch/FPU.cpp \
 	arch/FPU.h \
+	arch/CompBuffer.cpp \
+	arch/CompBuffer.h \
 	arch/IOBus.h \
         arch/IOBus.cpp \
 	arch/Memory.h \

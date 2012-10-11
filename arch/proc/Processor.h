@@ -38,7 +38,7 @@ public:
     Processor& operator=(const Processor&) = delete;
     ~Processor();
 
-    void Initialize(Processor* prev, Processor* next);
+    void Initialize(Processor* prev3, Processor* prev2, Processor* prev, Processor* next, Processor* next2, Processor* next3); //[FT]
     void Boot(MemAddr runAddress, bool legacy, PSize placeSize, SInteger startIndex);
 
     PID   GetPID()      const { return m_pid; }

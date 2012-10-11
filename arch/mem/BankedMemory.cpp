@@ -25,6 +25,9 @@ struct BankedMemory::Request
     MemData     data;
     WClientID   wid;
     CycleNo     done;
+    //FT-BEGIN
+    MCID        mcid;
+    //FT-END
 };
 
 class BankedMemory::Bank : public Object
@@ -115,7 +118,7 @@ class BankedMemory::Bank : public Object
                     return FAILED;
                 }
             } else {
-                if (!request.client->callback->OnMemoryReadCompleted(request.address, request.data.data)) {
+                if (!request.client->callback->OnMemoryReadCompleted(request.address, request.data.data, request.mcid)) {
                     return FAILED;
                 }
             }
@@ -321,7 +324,9 @@ bool BankedMemory::Read(MCID id, MemAddr address)
     assert(address % m_lineSize == 0);
 
     // Client should have been registered
-    assert(id < m_clients.size() && m_clients[id].callback != NULL);
+//FT-BEGIN
+    assert((id >> 11)< m_clients.size() && m_clients[id >> 11].callback != NULL);
+//FT-END
 
     size_t bank_index;
     MemAddr unused;
@@ -330,9 +335,14 @@ bool BankedMemory::Read(MCID id, MemAddr address)
 
     Request request;
     request.address   = address;
-    request.client    = &m_clients[id];
+//FT-BEGIN
+    request.client    = &m_clients[id>>11];
+//FT-END
     request.size      = m_lineSize;
     request.write     = false;
+//FT-BEGIN
+    request.mcid      = id;
+//FT-END
 
     Bank& bank = *m_banks[ bank_index ];
     if (!bank.AddIncomingRequest(request))

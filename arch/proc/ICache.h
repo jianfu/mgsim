@@ -78,10 +78,10 @@ public:
     bool   IsEmpty() const;
 
     // IMemoryCallback
-    bool   OnMemoryReadCompleted(MemAddr addr, const char* data) override;
+    bool   OnMemoryReadCompleted(MemAddr addr, const char* data, MCID /*[FT]*/) override;
     bool   OnMemoryWriteCompleted(TID tid) override;
     bool   OnMemorySnooped(MemAddr addr, const char* data, const bool* mask) override;
-    bool   OnMemoryInvalidated(MemAddr addr) override ;
+    bool   OnMemoryInvalidated(MemAddr addr) override;
     Object& GetMemoryPeer() override;
 
     // Admin

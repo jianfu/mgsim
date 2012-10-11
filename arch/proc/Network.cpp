@@ -44,6 +44,10 @@ Processor::Network::Network(
     CONSTRUCT_REGISTER(m_delegateIn),
     CONSTRUCT_REGISTER(m_link),
     CONSTRUCT_REGISTER(m_allocResponse),
+//FT-BEGIN
+    CONSTRUCT_REGISTER(m_rlink),
+    CONSTRUCT_REGISTER(m_rallocResponse),
+//FT-END
 #undef CONTRUCT_REGISTER
     m_syncs ("b_syncs", *this, clock, familyTable.GetNumFamilies(), 3 ),
 
@@ -51,6 +55,10 @@ Processor::Network::Network(
     p_DelegationIn (*this, "delegation-in",  delegate::create<Network, &Processor::Network::DoDelegationIn >(*this)),
     p_Link         (*this, "link",           delegate::create<Network, &Processor::Network::DoLink         >(*this)),
     p_AllocResponse(*this, "alloc-response", delegate::create<Network, &Processor::Network::DoAllocResponse>(*this)),
+//FT-BEGIN
+    p_rLink         (*this, "rlink",           delegate::create<Network, &Processor::Network::DorLink         >(*this)),
+    p_rAllocResponse(*this, "ralloc-response", delegate::create<Network, &Processor::Network::DorAllocResponse>(*this)),
+//FT-END
     p_Syncs        (*this, "syncs",          delegate::create<Network, &Processor::Network::DoSyncs        >(*this))
 {
     RegisterSampleVariableInObject(m_numAllocates, SVC_CUMULATIVE);
@@ -63,10 +71,15 @@ Processor::Network::Network(
     m_link.in.Sensitive(p_Link);
     m_syncs.Sensitive(p_Syncs);
 
+    //FT-BEGIN
+    m_rlink.in.Sensitive(p_rLink);
+    m_rallocResponse.in.Sensitive(p_rAllocResponse);
+    //FT-END
+
     m_allocResponse.in.Sensitive(p_AllocResponse);
 }
 
-void Processor::Network::Initialize(Network* prev, Network* next)
+void Processor::Network::Initialize(Network* prev3, Network* prev2, Network* prev, Network* next, Network* next2, Network* next3) // [FT]
 {
     m_prev = prev;
     m_next = next;
@@ -75,6 +88,28 @@ void Processor::Network::Initialize(Network* prev, Network* next)
     if (next != NULL) {
         INITIALIZE(m_link, next);
     }
+
+    //FT-BEGIN
+    if (next == NULL){   //the last core in regular network
+        INITIALIZE(m_rlink, prev);
+    }
+    else if (next2 != NULL){  //! the core before last core
+        if (m_parent.GetPID()%2)  //odd core
+            INITIALIZE(m_rlink, prev);
+        else                      //even core
+            INITIALIZE(m_rlink, next3);
+    }
+
+    if (prev == NULL){ //core 0
+        INITIALIZE(m_rallocResponse, next);
+    }
+    else if (prev2 != NULL){  //!core 1
+        if (m_parent.GetPID()%2)
+            INITIALIZE(m_rallocResponse, prev3);
+        else
+            INITIALIZE(m_rallocResponse, next);
+    }
+    //FT-END
 
     if (prev != NULL) {
         INITIALIZE(m_allocResponse, prev);
@@ -103,6 +138,13 @@ bool Processor::Network::SendMessage(const RemoteMessage& msg)
     case RemoteMessage::MSG_RAW_REGISTER: dmsg.dest = msg.rawreg.pid; break;
     case RemoteMessage::MSG_FAM_REGISTER: dmsg.dest = msg.famreg.fid.pid; break;
     case RemoteMessage::MSG_BREAK:        dmsg.dest = msg.brk.pid; break;
+    //FT-BEGIN
+    case RemoteMessage::MSG_ADDR_REGISTER: dmsg.dest = msg.addrreg.pid; break;
+    case RemoteMessage::MSG_RTHREADCOUNT:  dmsg.dest = msg.rtc.pid; break;
+    case RemoteMessage::MSG_MASTERTID:     dmsg.dest = msg.mtid.pid; break;
+    case RemoteMessage::MSG_PAIR:          dmsg.dest = msg.pair.mfid.pid; break;
+    //FT-END
+
     default:                              dmsg.dest = INVALID_PID; break;
     }
 
@@ -126,6 +168,16 @@ bool Processor::Network::SendMessage(const RemoteMessage& msg)
             return SUCCESS;
         }
 
+        //FT-BEGIN
+        // Avoid multiple break messages
+        if (msg.type == RemoteMessage::MSG_BREAK)
+        {
+            Family& family = m_familyTable[msg.brk.fid];
+            if (family.broken)
+                return true;
+        }
+        //FT-END
+	
         if (!m_delegateIn.Write(dmsg))
         {
             DeadlockWrite("Unable to buffer local network message to loopback %s", msg.str().c_str());
@@ -147,22 +199,55 @@ bool Processor::Network::SendMessage(const RemoteMessage& msg)
 
 bool Processor::Network::SendMessage(const LinkMessage& msg)
 {
-    assert(m_next != NULL);
+    //assert(m_next != NULL);
+
+    //FT-BEGIN
+    if (msg.redundant)
+    {	
+        if (!m_rlink.out.Write(msg))
+        {
+            DeadlockWrite("Unable to buffer rlink message: %s", msg.str().c_str());
+            return false;
+        }
+        DebugNetWrite("sent rlink message %s", msg.str().c_str());
+    }
+    else 
+    {
+    //FT-END
     if (!m_link.out.Write(msg))
     {
         DeadlockWrite("Unable to buffer link message: %s", msg.str().c_str());
         return false;
     }
     DebugNetWrite("sent link message %s", msg.str().c_str());
+    //FT-BEGIN
+    }
+    //FT-END
     return true;
 }
 
 bool Processor::Network::SendAllocResponse(const AllocResponse& msg)
 {
+    //FT-BEGIN
+    if (msg.redundant)  
+    {
+        if (!m_rallocResponse.out.Write(msg))
+        {
+            return false;
+        }
+        DebugSimWrite("sent rallocResponse message to CPU%u/R%04x", 
+                      (unsigned)msg.completion_pid, (unsigned)msg.completion_reg);
+    }
+    else 
+    {
+    //FT-END
     if (!m_allocResponse.out.Write(msg))
     {
         return false;
     }
+    //FT-BEGIN
+    }
+    //FT-END
     return true;
 }
 
@@ -227,7 +312,13 @@ Result Processor::Network::DoAllocResponse()
     msg.prev_fid = family.link;
 
     // Set the link field to the next FID (LFID_INVALID if failed)
-    COMMIT{ family.link = msg.next_fid; }
+    COMMIT
+    {
+        family.link  = msg.next_fid;
+        //FT-BEGIN
+        family.nlink = msg.nnext_fid;
+        //FT-END
+    }
 
     // Number of cores in the place up to, and including, this core
     const PSize numCores = (m_parent.GetPID() % family.placeSize) + 1;
@@ -249,8 +340,14 @@ Result Processor::Network::DoAllocResponse()
     else
     {
         // Commit the allocation
-        COMMIT{ family.numCores = msg.numCores; }
+        COMMIT
+        { 
+            family.numCores = msg.numCores;
+            //FT-BEGIN
+            msg.nnext_fid = msg.next_fid;
         msg.next_fid = lfid;
+            //FT-END
+        }
     }
 
     if (msg.prev_fid == INVALID_LFID)
@@ -307,6 +404,109 @@ Result Processor::Network::DoAllocResponse()
     m_allocResponse.in.Clear();
     return SUCCESS;
 }
+
+//FT-BEGIN
+Result Processor::Network::DorAllocResponse()
+{
+    assert(!m_rallocResponse.in.Empty());
+    AllocResponse msg = m_rallocResponse.in.Read();
+
+    const LFID lfid = msg.prev_fid;
+    Family& family = m_familyTable[lfid];
+
+    // Grab the previous FID from the link field
+    msg.prev_fid = family.link;
+
+    // Set the link field to the next FID (LFID_INVALID if failed)
+    COMMIT
+    {
+        family.link = msg.next_fid;
+        family.nlink = msg.nnext_fid;
+    }
+
+
+    // Number of cores in the place up to, and including, this core
+    const PSize numCores = (m_parent.GetPID() % family.placeSize) + 1;
+
+    if (msg.numCores == 0 && !msg.exact && IsPowerOfTwo(numCores))
+    {
+        // We've unwinded the place to a power of two.
+        // Stop unwinding and commit.
+        msg.numCores = numCores;
+
+        DebugSimWrite("Unwound allocation to %u cores", (unsigned)numCores);
+    }
+
+    if (msg.numCores == 0)
+    {
+        // Unwind the allocation by releasing the context
+        m_allocator.ReleaseContext(lfid);
+    }
+    else
+    {
+        // Commit the allocation
+        COMMIT
+        {
+            family.numCores = msg.numCores;
+            msg.nnext_fid = msg.next_fid;
+            msg.next_fid = lfid;
+        }
+    }
+
+    if (msg.prev_fid == INVALID_LFID)
+    {
+        // We're back at the first core, acknowledge allocate or fail
+        FID fid;
+        if (msg.numCores == 0)
+        {
+            // We can only fail at the first core if we have the exact flag
+            // (Cause otherwise we commit from the power of two, and 1 core
+            // always succeeds).
+            assert(msg.exact);
+
+            fid.pid        = 0;
+            fid.lfid       = 0;
+            fid.capability = 0;
+
+            DebugSimWrite("Exact allocation failed");
+        }
+        else
+        {
+            fid.pid        = m_parent.GetPID();
+            fid.lfid       = lfid;
+            fid.capability = family.capability;
+
+            DebugSimWrite("Allocation succeeded: F%u@CPU%u", (unsigned)fid.lfid, (unsigned)fid.pid);
+        }
+
+        RemoteMessage fwd;
+        fwd.type = RemoteMessage::MSG_RAW_REGISTER;
+        fwd.rawreg.pid             = msg.completion_pid;
+        fwd.rawreg.addr            = MAKE_REGADDR(RT_INTEGER, msg.completion_reg);
+        fwd.rawreg.value.m_state   = RST_FULL;
+        fwd.rawreg.value.m_integer = m_parent.PackFID(fid);
+
+
+        if (!SendMessage(fwd))
+        {
+            DeadlockWrite("Unable to send remote allocation writeback");
+            return FAILED;
+        }
+    }
+    // Forward response
+    else if (!m_rallocResponse.out.Write(msg))
+    {
+        return FAILED;
+    }
+
+    DebugSimWrite("F%u backward allocation response to CPU%u/F%u, ralloc",
+                  (unsigned)lfid, (unsigned)(m_parent.GetPID() - 1), (unsigned)msg.prev_fid);
+
+
+    m_rallocResponse.in.Clear();
+    return SUCCESS;
+}
+//FT-END
 
 bool Processor::Network::ReadRegister(LFID fid, RemoteRegType kind, const RegAddr& raddr, RegValue& value)
 {
@@ -397,6 +597,9 @@ bool Processor::Network::OnSync(LFID fid, PID completion_pid, RegIndex completio
         fwd.sync.fid            = family.link;
         fwd.sync.completion_pid = completion_pid;
         fwd.sync.completion_reg = completion_reg;
+        //FT-BEGIN
+        fwd.redundant           = family.redundant;
+        //FT-END
 
         if (!SendMessage(fwd))
         {
@@ -456,6 +659,9 @@ bool Processor::Network::OnDetach(LFID fid)
         LinkMessage msg;
         msg.type = LinkMessage::MSG_DETACH;
         msg.detach.fid = family.link;
+        //FT-BEGIN
+        msg.redundant = family.redundant;
+        //FT-END
         if (!SendMessage(msg))
         {
             return false;
@@ -484,6 +690,9 @@ bool Processor::Network::OnBreak(LFID fid)
         LinkMessage msg;
         msg.type    = LinkMessage::MSG_BREAK;
         msg.brk.fid = family.link;
+        //FT-BEGIN
+        msg.redundant = family.redundant;
+        //FT-END
 
         if (!SendMessage(msg))
         {
@@ -606,6 +815,12 @@ Result Processor::Network::DoDelegationIn()
             fwd.property.type  = msg.property.type;
             fwd.property.value = msg.property.value;
 
+            //FT-BEGIN
+            //this core is the 1st core in the place
+            //if it is an odd core, it is a redundnat family; or it is a master family.
+            fwd.redundant      = (bool)(m_parent.GetPID() % 2);
+            //FT-END
+			
             if (!SendMessage(fwd))
             {
                 return FAILED;
@@ -704,6 +919,10 @@ Result Processor::Network::DoDelegationIn()
                 fwd.global.fid   = family.link;
                 fwd.global.addr  = msg.famreg.addr;
                 fwd.global.value = msg.famreg.value;
+                //FT-BEGIN
+                fwd.redundant    = family.redundant;
+                //FT-END
+
                 if (!SendMessage(fwd))
                 {
                     return FAILED;
@@ -731,6 +950,73 @@ Result Processor::Network::DoDelegationIn()
     }
     break;
 
+    //FT-BEGIN
+    case RemoteMessage::MSG_ADDR_REGISTER:
+        if (!m_allocator.SetRegIndex(msg.addrreg.tid, msg.addrreg.index))
+        {
+            DeadlockWrite("Unable to set the reg index.");
+            return FAILED;
+        }
+        break;
+
+    case RemoteMessage::MSG_RTHREADCOUNT:
+    {
+        Family& family = m_familyTable[msg.rtc.lfid];
+        COMMIT{ family.rthreadCount++; }
+        //printf("C%u, rtc: %u\n", (unsigned)m_parent.GetPID(), (unsigned)family.rthreadCount);
+    }
+    break;
+
+    case RemoteMessage::MSG_MASTERTID:
+        if(!m_allocator.FindReadyThread(msg.mtid.lfid, msg.mtid.tid, msg.mtid.index))
+            return FAILED;
+        break;
+
+    case RemoteMessage::MSG_PAIR:
+    {
+        //the first core
+        Family& family = m_allocator.GetFamilyChecked(msg.pair.mfid.lfid, msg.pair.mfid.capability);
+
+        COMMIT{family.corr_fid = msg.pair.rfid.lfid;}
+
+        if(family.link == INVALID_LFID) //the last core
+        {
+            RemoteMessage response;
+            response.type                        = RemoteMessage::MSG_RAW_REGISTER;
+            response.rawreg.pid                  = msg.pair.completion_pid;
+            response.rawreg.addr                 = MAKE_REGADDR(RT_INTEGER, msg.pair.completion_reg);
+            response.rawreg.value.m_state        = RST_FULL;
+            response.rawreg.value.m_integer      = m_parent.PackFID(msg.pair.mfid);
+
+            if (!SendMessage(response))
+            {
+                DeadlockWrite("Unable to buffer outgoing remote register response, RMT_MSG_PAIR");
+                return FAILED;
+            }
+        }
+        else //send link message to next core
+        {
+            LinkMessage fwd;
+            fwd.type                  = LinkMessage::MSG_PAIR;
+            fwd.pair.mlfid            = family.link;
+            fwd.pair.rlfid            = msg.pair.rfid.lfid;
+            fwd.pair.completion_pid   = msg.pair.completion_pid;
+            fwd.pair.completion_reg   = msg.pair.completion_reg;
+            fwd.pair.first_fid        = m_parent.PackFID(msg.pair.mfid);
+
+            fwd.redundant    = family.redundant;
+
+            if (!SendMessage(fwd))
+            {
+                DeadlockWrite("Unable to send link message, RMT_MSG_PAIR");
+                return FAILED;
+            }
+        }
+
+    }
+    break;
+    //FT-END
+		
     default:
         assert(false);
         break;
@@ -923,6 +1209,60 @@ Result Processor::Network::DoLink()
         }
         break;
 
+    //FT-BEGIN
+    case LinkMessage::MSG_PAIR:
+    {
+        Family& family  = m_familyTable[msg.pair.mlfid];
+        Family& rfamily = m_familyTable[msg.pair.rlfid];
+
+        bool flag = m_parent.GetPID() % 2;
+
+        COMMIT
+        {
+            family.corr_fid = flag ? rfamily.link : msg.pair.rlfid;
+        }
+
+
+        if(family.link == INVALID_LFID) //the last core
+        {
+            RemoteMessage response;
+            response.type                        = RemoteMessage::MSG_RAW_REGISTER;
+            response.rawreg.pid                  = msg.pair.completion_pid;
+            response.rawreg.addr                 = MAKE_REGADDR(RT_INTEGER, msg.pair.completion_reg);
+            response.rawreg.value.m_state        = RST_FULL;
+            response.rawreg.value.m_integer      = msg.pair.first_fid;
+
+            if (!SendMessage(response))
+            {
+                DeadlockWrite("Unable to buffer outgoing remote register response, LINK_MSG_PAIR");
+                return FAILED;
+            }
+        }
+        else //send link message to next core
+        {
+            LinkMessage fwd;
+            fwd.type                  = LinkMessage::MSG_PAIR;
+            fwd.pair.mlfid            = family.link;
+
+            fwd.pair.rlfid            = flag ? rfamily.nlink : msg.pair.rlfid;
+
+            fwd.pair.completion_pid   = msg.pair.completion_pid;
+            fwd.pair.completion_reg   = msg.pair.completion_reg;
+            fwd.pair.first_fid        = msg.pair.first_fid;
+
+            fwd.redundant    = msg.redundant;
+
+            if (!SendMessage(fwd))
+            {
+                DeadlockWrite("Unable to send link message, LINK_MSG_PAIR");
+                return FAILED;
+            }
+        }
+
+    }
+    break;
+    //FT-END
+
     default:
         assert(false);
         break;
@@ -931,6 +1271,252 @@ Result Processor::Network::DoLink()
     m_link.in.Clear();
     return SUCCESS;
 }
+
+//FT-BEGIN
+Result Processor::Network::DorLink()
+{
+    // Handle incoming message from the link
+    assert(!m_rlink.in.Empty());
+    const LinkMessage& msg = m_rlink.in.Read();
+
+    DebugNetWrite("accepted rlink message %s", msg.str().c_str());
+
+    switch (msg.type)
+    {
+    case LinkMessage::MSG_ALLOCATE:
+        if (!m_allocator.QueueFamilyAllocation(msg))
+        {
+            DeadlockWrite("Unable to process family allocation request");
+            return FAILED;
+        }
+        break;
+
+    case LinkMessage::MSG_BALLOCATE:
+    {
+        RemoteMessage rmsg;
+        rmsg.allocate.place.pid = m_parent.GetPID();
+
+        unsigned used_contexts = m_familyTable.GetNumUsedFamilies(CONTEXT_NORMAL);
+        if (used_contexts >= m_loadBalanceThreshold)
+        {
+            if ((m_parent.GetPID() + 1) % msg.ballocate.size != 0)
+            {
+                // Not the last core yet; forward the message
+                LinkMessage fwd(msg);
+                if (used_contexts <= fwd.ballocate.min_contexts)
+                {
+                    // This core's the new minimum
+                    fwd.ballocate.min_contexts = used_contexts;
+                    fwd.ballocate.min_pid      = m_parent.GetPID();
+                }
+
+                if (!SendMessage(fwd))
+                {
+                    return FAILED;
+                }
+                break;
+            }
+
+            // Last core and we haven't met threshold, allocate on minimum
+            if (used_contexts > msg.ballocate.min_contexts)
+            {
+                // Minimum is not on this core, send it to the minimum
+                rmsg.allocate.place.pid = msg.ballocate.min_pid;
+            }
+        }
+
+        // Send a remote allocate as a place of one
+        rmsg.type = RemoteMessage::MSG_ALLOCATE;
+        rmsg.allocate.place.size     = msg.ballocate.size;
+        rmsg.allocate.suspend        = msg.ballocate.suspend;
+        rmsg.allocate.exclusive      = false;
+        rmsg.allocate.type           = ALLOCATE_SINGLE;
+        rmsg.allocate.completion_pid = msg.ballocate.completion_pid;
+        rmsg.allocate.completion_reg = msg.ballocate.completion_reg;
+        if (!SendMessage(rmsg))
+        {
+            return FAILED;
+        }
+
+        break;
+    }
+
+    case LinkMessage::MSG_SET_PROPERTY:
+    {
+        Family& family = m_familyTable[msg.property.fid];
+        COMMIT
+        {
+            // Set property
+            switch (msg.property.type)
+            {
+            case FAMPROP_START: family.start         = (SInteger)msg.property.value; break;
+            case FAMPROP_LIMIT: family.limit         = (SInteger)msg.property.value; break;
+            case FAMPROP_STEP:  family.step          = (SInteger)msg.property.value; break;
+            case FAMPROP_BLOCK: family.physBlockSize = (TSize)msg.property.value; break;
+            default: assert(false); break;
+            }
+        }
+
+        if (family.link != INVALID_LFID)
+        {
+            // Forward message on link
+            LinkMessage fwd(msg);
+            fwd.property.fid = family.link;
+
+            if (!SendMessage(fwd))
+            {
+                return FAILED;
+            }
+        }
+        break;
+    }
+
+    case LinkMessage::MSG_CREATE:
+    {
+        Family& family = m_familyTable[msg.create.fid];
+
+        if (msg.create.numCores == 0)
+        {
+            // Forward message and clean up context
+            if (family.link != INVALID_LFID)
+            {
+                LinkMessage fwd(msg);
+                fwd.create.fid = family.link;
+                if (!SendMessage(fwd))
+                {
+                    DeadlockWrite("Unable to forward restrict message");
+                    return FAILED;
+                }
+                DebugSimWrite("F%u forwarded restrict message", (unsigned)msg.create.fid);
+            }
+
+            m_allocator.ReleaseContext(msg.create.fid);
+            DebugSimWrite("F%u cleaned up (restricted due to create)", (unsigned)msg.create.fid);
+        }
+        // Process the received create.
+        // This will forward the message.
+        else if (!m_allocator.QueueCreate(msg))
+        {
+            DeadlockWrite("Unable to process received place create");
+            return FAILED;
+        }
+        break;
+    }
+
+    case LinkMessage::MSG_DONE:
+    {
+        Family& family = m_familyTable[msg.done.fid];
+
+        COMMIT { family.broken |= msg.done.broken; }
+
+        if (!m_allocator.DecreaseFamilyDependency(msg.done.fid, FAMDEP_PREV_SYNCHRONIZED))
+        {
+            DeadlockWrite("Unable to mark family synchronization on F%u", (unsigned)msg.done.fid);
+            return FAILED;
+        }
+        break;
+    }
+    case LinkMessage::MSG_SYNC:
+        if (!OnSync(msg.sync.fid, msg.sync.completion_pid, msg.sync.completion_reg))
+        {
+            return FAILED;
+        }
+        break;
+
+    case LinkMessage::MSG_DETACH:
+        if (!OnDetach(msg.detach.fid))
+        {
+            return FAILED;
+        }
+        break;
+
+    case LinkMessage::MSG_GLOBAL:
+    {
+        const Family& family = m_familyTable[msg.global.fid];
+        if (!WriteRegister(msg.global.fid, RRT_GLOBAL, msg.global.addr, msg.global.value))
+        {
+            return FAILED;
+        }
+
+        if (family.link != INVALID_LFID)
+        {
+            // Forward on link as well
+            LinkMessage fwd(msg);
+            fwd.global.fid = family.link;
+            if (!SendMessage(fwd))
+            {
+                return FAILED;
+            }
+        }
+        break;
+    }
+
+    case LinkMessage::MSG_BREAK:
+        if (!OnBreak(msg.brk.fid))
+        {
+            return FAILED;
+        }
+        break;
+
+    case LinkMessage::MSG_PAIR:
+    {
+        Family& family  = m_familyTable[msg.pair.mlfid];
+        Family& rfamily = m_familyTable[msg.pair.rlfid];
+
+        bool flag = m_parent.GetPID()%2;
+
+        COMMIT{family.corr_fid = flag ? msg.pair.rlfid : rfamily.link;}
+
+
+        if(family.link == INVALID_LFID) //the last core
+        {
+            RemoteMessage response;
+            response.type                        = RemoteMessage::MSG_RAW_REGISTER;
+            response.rawreg.pid                  = msg.pair.completion_pid;
+            response.rawreg.addr                 = MAKE_REGADDR(RT_INTEGER, msg.pair.completion_reg);
+            response.rawreg.value.m_state        = RST_FULL;
+            response.rawreg.value.m_integer      = msg.pair.first_fid;
+
+            if (!SendMessage(response))
+            {
+                DeadlockWrite("Unable to buffer outgoing remote register response, LINK_MSG_PAIR");
+                return FAILED;
+            }
+        }
+        else //send link message to next core
+        {
+            LinkMessage fwd;
+            fwd.type                  = LinkMessage::MSG_PAIR;
+            fwd.pair.mlfid            = family.link;
+
+            fwd.pair.rlfid            = flag ? msg.pair.rlfid : rfamily.nlink;
+
+            fwd.pair.completion_pid   = msg.pair.completion_pid;
+            fwd.pair.completion_reg   = msg.pair.completion_reg;
+            fwd.pair.first_fid        = msg.pair.first_fid;
+
+            fwd.redundant    = msg.redundant;
+
+            if (!SendMessage(fwd))
+            {
+                DeadlockWrite("Unable to send link message, LINK_MSG_PAIR");
+                return FAILED;
+            }
+        }
+
+    }
+    break;
+
+    default:
+        assert(false);
+        break;
+    }
+
+    m_rlink.in.Clear();
+    return SUCCESS;
+}
+
+//FT-END
 
 void Processor::Network::Cmd_Info(ostream& out, const vector<string>& /* arguments */) const
 {
@@ -988,6 +1574,29 @@ void Processor::Network::Cmd_Read(ostream& out, const vector<string>& /* argumen
         out << endl;
     }
 
+    //FT-BEGIN
+    const struct {
+        const char*                  name;
+        const Register<LinkMessage>& reg;
+    } rLinkRegisters[2] = {
+        {"Incoming", m_rlink.in},
+        {"Outgoing", m_rlink.out}
+    };
+    
+    for (size_t i = 0; i < 2; ++i)
+    {
+        out << rLinkRegisters[i].name << " rlink:" << endl;
+        out << dec;
+        if (!rLinkRegisters[i].reg.Empty()) {
+            const LinkMessage& msg = rLinkRegisters[i].reg.Read();
+            out << msg.str();
+        } else {
+            out << "Empty";
+        }
+        out << endl;
+    }
+    //FT-END
+	
     out << "Family events:" << dec << endl;
     for (Buffer<SyncInfo>::const_iterator p = m_syncs.begin(); p != m_syncs.end(); ++p)
     {
@@ -1085,6 +1694,42 @@ string Processor::RemoteMessage::str() const
         }
         ss << "]";
         break;
+    //FT-BEGIN
+    case MSG_ADDR_REGISTER:
+        ss << "[addrregister"
+           << " pid " << addrreg.pid
+           << " tid " << addrreg.tid
+           << " index " << addrreg.index
+           << "]";
+        ;
+        break;
+    case MSG_RTHREADCOUNT:
+        ss << "[rtc"
+           << " pid " << rtc.pid
+           << " lfid " << rtc.lfid
+           << " tid " << rtc.tid
+           << "]";
+        ;
+        break;
+    case MSG_MASTERTID:
+        ss << "[mtid"
+           << " pid " << mtid.pid
+           << " lfid " << mtid.lfid
+           << " tid " << mtid.tid
+           << " index " << mtid.index
+           << "]";
+        ;
+        break;
+    case MSG_PAIR:
+        ss << "[pair"
+           << " mfid " << pair.mfid.str()
+           << " rfid " << pair.rfid.str()
+           << " reg " << pair.completion_reg
+           << " pid " << pair.completion_pid
+           << "]";
+        ;
+        break;
+    //FT-END
     default:
         assert(false); // all types should be listed here.
     }
@@ -1177,6 +1822,17 @@ string Processor::LinkMessage::str() const
            << ']'
             ;
         break;
+    //FT-BEGIN
+    case MSG_PAIR:
+        ss << "[pair"
+           << " mlfid " << pair.mlfid
+           << " rlfid " << pair.rlfid
+           << " cpid "  << pair.completion_pid
+           << " creg "  << pair.completion_reg
+           << " ffid "  << pair.first_fid
+           << "]";
+        break;
+    //FT-END
     default:
         assert(false); // all types should be listed here.
     }

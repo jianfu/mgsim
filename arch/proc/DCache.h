@@ -65,6 +65,9 @@ private:
     Processor&           m_parent;          ///< Parent processor.
     Allocator&           m_allocator;       ///< Allocator component.
     FamilyTable&         m_familyTable;     ///< Family table .
+	//FT--BEGIN
+	ThreadTable&  		 m_threadTable;
+	//FT--END
     RegisterFile&        m_regFile;         ///< Register File.
     IMemory&             m_memory;          ///< Memory
     MCID                 m_mcid;            ///< Memory Client ID
@@ -105,7 +108,7 @@ private:
     Result DoOutgoingRequests();
 
 public:
-    DCache(const std::string& name, Processor& parent, Clock& clock, Allocator& allocator, FamilyTable& familyTable, RegisterFile& regFile, IMemory& memory, Config& config);
+    DCache(const std::string& name, Processor& parent, Clock& clock, Allocator& allocator, FamilyTable& familyTable, ThreadTable& threadTable /*[FT]*/, RegisterFile& regFile, IMemory& memory, Config& config);
     DCache(const DCache&) = delete;
     DCache& operator=(const DCache&) = delete;
     ~DCache();
@@ -118,13 +121,13 @@ public:
     ArbitratedService<> p_service;
 
     // Public interface
-    Result Read (MemAddr address, void* data, MemSize size, RegAddr* reg);
+    Result Read (MemAddr address, void* data, MemSize size, RegAddr* reg, TID tid /*[FT]*/);
     Result Write(MemAddr address, void* data, MemSize size, LFID fid, TID tid);
 
     size_t GetLineSize() const { return m_lineSize; }
 
     // Memory callbacks
-    bool OnMemoryReadCompleted(MemAddr addr, const char* data) override;
+    bool OnMemoryReadCompleted(MemAddr addr, const char* data, MCID /*[FT]*/) override;
     bool OnMemoryWriteCompleted(TID tid) override;
     bool OnMemorySnooped(MemAddr addr, const char* data, const bool* mask) override;
     bool OnMemoryInvalidated(MemAddr addr) override;

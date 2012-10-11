@@ -77,6 +77,9 @@ struct Family
     };
     Dependencies dependencies;   // The dependencies for termination and cleanup
     LFID         link;           // The LFID of the matching family on the next CPU (prev during allocate)
+    //FT-BEGIN
+    LFID         nlink;          // The LFID of the matching family on the next next CPU 
+    //FT-END
     bool         hasShareds;     // Does this family use shareds?
     bool         legacy;         // Consists of a single thread of legacy code?
     bool         prevCleanedUp;  // Last thread has been cleaned up
@@ -93,6 +96,12 @@ struct Family
 
     RegInfo      regs[NUM_REG_TYPES];    // Register information
 
+    //FT-BEGIN
+    bool         redundant;
+    LFID         corr_fid;
+    TSize        rthreadCount;   //The distance of thread creation between master family and redundant family
+    //FT-END
+	
     // Admin
     FamilyState  state;          // Family state
 };

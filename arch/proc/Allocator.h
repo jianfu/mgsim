@@ -43,6 +43,9 @@ public:
         RegIndex       completion_reg; ///< Register (on that core) that will receive the FID
         bool           bundle;         ///< Whether the family parameters are already bundled.
         Bundle         binfo;          ///< The bundle information for bundled requests.
+        //FT-BEGIN
+        bool           redundant;
+        //FT-END
     };
 
     // These are the different states in the state machine for
@@ -123,6 +126,11 @@ public:
     bool DecreaseThreadDependency(TID tid, ThreadDependency dep);
 
     TID PopActiveThread();
+
+    //FT-BEGIN
+    bool FindReadyThread(LFID fid, TID mtid, uint64_t index);
+    bool SetRegIndex(TID tid, RegIndex index);
+    //FT-END
 
     // Helpers
     TID  GetRegisterType(LFID fid, RegAddr addr, RegClass* group) const;

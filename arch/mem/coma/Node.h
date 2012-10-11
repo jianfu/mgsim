@@ -56,6 +56,7 @@ protected:
             size_t       client;        ///< Sending client (UP)
             WClientID    wid;           ///< Sending entity on client (family/thread) (UP)
             unsigned int tokens;        ///< Number of tokens in this message (RDT, EV)
+            MCID         mcid; /* [FT] */
         };
 
         /// For memory management

@@ -3,6 +3,7 @@
 
 #include <arch/proc/Processor.h>
 #include <arch/FPU.h>
+#include <arch/CompBuffer.h>
 #include <arch/symtable.h>
 #include <arch/IOBus.h>
 #include <sim/breakpoints.h>
@@ -21,13 +22,17 @@ namespace Simulator {
     class MGSystem
     {
         Kernel                      m_kernel;
-        Clock&                      m_clock;    ///< Master clock for the system
+        Clock&                      m_clock;    ///< Clock for individual cores in the system
         Object                      m_root;     ///< Root object for the system
         std::vector<Processor*>     m_procs;
         std::vector<FPU*>           m_fpus;
         std::vector<IIOBus*>        m_iobuses;
         std::vector<Object*>        m_devices;
         std::map<size_t, size_t>    m_procbusmapping;
+
+        //FT-BEGIN
+        std::vector<CompBuffer*>    m_cbs;
+        //FT-END
 
         SymbolTable                 m_symtable;
         BreakPointManager           m_breakpoints;

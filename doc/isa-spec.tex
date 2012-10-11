@@ -48,6 +48,10 @@ puts Rv, Rf, imm5       & 0x01 & Op     & Rf &                    Rv & 0 & 0 & 0
 puts imm8, Rf, imm5     & 0x01 & Op     & Rf & \multicolumn{2}{c|}{imm8} & 1 & 0100101 & imm5 \\ \cline{5-7}
 fputs Fv, Rf, imm5      & 0x05 & FP Op  & Rf & Fv & \multicolumn{2}{c|}{0} & 0100101 & imm5 \\ \cline{6-7}
 release  Rf             & 0x01 & Op     & Rf &                    11111 & 0 & 0 & 0101000 & 11111 \\
+%FT-BEGIN
+pair  Rf, Rf'             & 0x01 & Op     & Rf &                    Rf'     & 0 & 0 & 0101001 & 11111 \\
+rmtwr  Rf'               & 0x01 & Op     & Rf' &                    11111 & 0 & 0 & 0101010 & 11111 \\
+%FT-END
 \hline\hline
 \normalfont \emph{(future remote async)} & 0x01 & Op & x & x & x & x & 010xxxx & x \\
 \normalfont \emph{(future remote async)} & 0x05 & FP Op & x & x & x & x & 010xxxx & x \\
@@ -67,6 +71,14 @@ allocate/s Rp, Ro, Rf   & 0x01 & Op     & Rp &                    Ro & 0 & 0 & 1
 allocate/s Rp, imm8, Rf & 0x01 & Op     & Rp & \multicolumn{2}{c|}{imm8} & 1 & 1000001 & Rf \\ \cline{5-6}
 allocate/x Rp, Ro, Rf   & 0x01 & Op     & Rp &                    Ro & 0 & 0 & 1000011 & Rf \\ \cline{5-6}
 allocate/x Rp, imm8, Rf & 0x01 & Op     & Rp & \multicolumn{2}{c|}{imm8} & 1 & 1000011 & Rf \\ \cline{5-6}
+%FT-BEGIN
+allocate/r Rp, Ro, Rf'     & 0x01 & Op     & Rp &                    Ro & 0 & 0 & 1010000 & Rf' \\ \cline{5-6}
+allocate/r Rp, imm8, Rf'   & 0x01 & Op     & Rp & \multicolumn{2}{c|}{imm8} & 1 & 1010000 & Rf' \\ \cline{5-6}
+allocate/rs Rp, Ro, Rf'   & 0x01 & Op     & Rp &                    Ro & 0 & 0 & 1010001 & Rf' \\ \cline{5-6}
+allocate/rs Rp, imm8, Rf' & 0x01 & Op     & Rp & \multicolumn{2}{c|}{imm8} & 1 & 1010001 & Rf' \\ \cline{5-6}
+allocate/rx Rp, Ro, Rf'   & 0x01 & Op     & Rp &                    Ro & 0 & 0 & 1010011 & Rf' \\ \cline{5-6}
+allocate/rx Rp, imm8, Rf' & 0x01 & Op     & Rp & \multicolumn{2}{c|}{imm8} & 1 & 1010011 & Rf' \\ \cline{5-6}
+%FT-END
 \hline \hline
 creba/a Rs, Rv          & 0x01 & Op     & Rs &                    Rv & 0 & 0 & 1100001 & 11111 \\ \cline{5-6}
 creba/a Rs, imm8        & 0x01 & Op     & Rs & \multicolumn{2}{c|}{imm8} & 1 & 1100001 & 11111 \\ \cline{5-6}

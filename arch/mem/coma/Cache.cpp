@@ -58,9 +58,16 @@ bool COMA::Cache::Read(MCID id, MemAddr address)
     Request req;
     req.address = address;
     req.write   = false;
+    //FT-BEGIN
+    req.mcid    = id;
+    //FT-END
 
     // Client should have been registered
-    assert(m_clients[id] != NULL);
+
+    //FT-BEGIN
+    // Here shift number depends on NumThreadEntires.
+    assert(m_clients[id >> 10] != NULL);
+    //FT-END
 
     if (!m_requests.Push(req))
     {
@@ -209,7 +216,7 @@ COMA::Cache::Line* COMA::Cache::AllocateLine(MemAddr address, bool empty_only, M
     return (empty != NULL) ? empty : replace;
 }
 
-bool COMA::Cache::EvictLine(Line* line, const Request& req)
+bool COMA::Cache::EvictLine(Line* line, const Request& req)  //req is not used. [Jian]
 {
     // We never evict loading or updating lines
     assert(line->state != LINE_LOADING);
@@ -360,7 +367,7 @@ bool COMA::Cache::OnMessageReceived(Message* msg)
             // Update the message. This will ensure the response
             // gets the latest value, and other processors too
             // (which is fine, according to non-determinism).
-            line::blit(msg->data.data, line->data, line->valid, m_lineSize);
+            line::blit(msg->data.data, line->data, line->valid, m_lineSize); //this msg will be deleted soon, is it neccessary to update it? [Jian]
 
             // Store the data, masked by the already-valid bitmask
             line::blitnot(line->data, msg->data.data, line->valid, m_lineSize);
@@ -394,7 +401,9 @@ bool COMA::Cache::OnMessageReceived(Message* msg)
             }
         }
 
-        if (!OnReadCompleted(msg->address, data))
+        //FT-BEGIN
+        if (!OnReadCompleted(msg->address, data, msg->mcid))
+        //FT-END
         {
             DeadlockWrite("Unable to notify clients of read completion");
             ++m_numStallingRCompletions;
@@ -543,7 +552,7 @@ bool COMA::Cache::OnMessageReceived(Message* msg)
     return true;
 }
 
-bool COMA::Cache::OnReadCompleted(MemAddr addr, const char * data)
+bool COMA::Cache::OnReadCompleted(MemAddr addr, const char * data, MCID mcid) //FT
 {
     // Send the completion on the bus
     if (!p_bus.Invoke())
@@ -554,7 +563,9 @@ bool COMA::Cache::OnReadCompleted(MemAddr addr, const char * data)
 
     for (std::vector<IMemoryCallback*>::const_iterator p = m_clients.begin(); p != m_clients.end(); ++p)
     {
-        if (*p != NULL && !(*p)->OnMemoryReadCompleted(addr, data))
+        //FT-BEGIN
+        if (*p != NULL && !(*p)->OnMemoryReadCompleted(addr, data, mcid))
+        //FT-END
         {
             DeadlockWrite("Unable to send read completion to clients");
             return false;
@@ -785,6 +796,9 @@ Result COMA::Cache::OnReadRequest(const Request& req)
             msg->ignore    = false;
             msg->tokens    = 0;
             msg->sender    = m_id;
+            //FT-BEGIN
+            msg->mcid      = req.mcid;
+            //FT-END
         }
 
         if (!SendMessage(msg, MINSPACE_INSERTION))
@@ -817,7 +831,9 @@ Result COMA::Cache::OnReadRequest(const Request& req)
             ++m_numRFullHits;
         }
 
-        if (!OnReadCompleted(req.address, data))
+        //FT-BEGIN
+        if (!OnReadCompleted(req.address, data, req.mcid))
+        //FT-END
         {
             ++m_numStallingRHits;
             DeadlockWrite("Unable to notify clients of read completion");

@@ -28,6 +28,9 @@ main:
 
     # Check if the result matches
     lda $2, 2080($31)
+	mov 128, $30
+	print $2, $30
+	print $1, $30
     subq $1, $2, $1
     beq $1, 1f
     halt        # Cause an invalid instruction

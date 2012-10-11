@@ -12,9 +12,13 @@ using namespace std;
 namespace Simulator
 {
 
-Processor::DCache::DCache(const std::string& name, Processor& parent, Clock& clock, Allocator& alloc, FamilyTable& familyTable, RegisterFile& regFile, IMemory& memory, Config& config)
+Processor::DCache::DCache(const std::string& name, Processor& parent, Clock& clock, Allocator& alloc, FamilyTable& familyTable, ThreadTable& threadTable /*[FT]*/, RegisterFile& regFile, IMemory& memory, Config& config)
 :   Object(name, parent, clock), m_parent(parent),
-    m_allocator(alloc), m_familyTable(familyTable), m_regFile(regFile),
+    m_allocator(alloc), m_familyTable(familyTable), 
+//FT-BEGIN
+    m_threadTable(threadTable), 
+//FT-END
+    m_regFile(regFile),
     m_memory(memory),
     m_mcid(0),
     m_lines(),
@@ -175,7 +179,7 @@ Result Processor::DCache::FindLine(MemAddr address, Line* &line, bool check_only
 
 
 
-Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg)
+Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg, TID tid /*[FT]*/)
 {
     size_t offset = (size_t)(address % m_lineSize);
     if (offset + size > m_lineSize)
@@ -229,6 +233,10 @@ Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAdd
         Request request;
         request.write     = false;
         request.address   = address - offset;
+        //FT--BEGIN
+        request.wid       = tid;
+        //FT--END
+
         if (!m_outgoing.Push(request))
         {
             ++m_numStallingRMisses;
@@ -398,13 +406,16 @@ Result Processor::DCache::Write(MemAddr address, void* data, MemSize size, LFID 
         DeadlockWrite("Unable to push request to outgoing buffer");
         return FAILED;
     }
+    //FT-BEGIN
+    DebugMemWrite("Write to m_outgoing from dcache: %#016llx", (unsigned long long)request.address);
+    //FT-END
 
     COMMIT{ ++m_numWAccesses; }
 
     return DELAYED;
 }
 
-bool Processor::DCache::OnMemoryReadCompleted(MemAddr addr, const char* data)
+bool Processor::DCache::OnMemoryReadCompleted(MemAddr addr, const char* data, MCID /*[FT]*/)
 {
     // Check if we have the line and if its loading.
     // This method gets called whenever a memory read completion is put on the
@@ -580,7 +591,7 @@ Result Processor::DCache::DoCompletedReads()
                 return FAILED;
             }
 
-            if (value.m_state != RST_PENDING && value.m_state != RST_WAITING)
+            if (value.m_state != RST_PENDING && value.m_state != RST_WAITING)  //FIXME: Is it correct? [Jian]
             {
                 // We're too fast, wait!
                 DeadlockWrite("Memory read completed before register %s was cleared", line.waiting.str().c_str());
@@ -712,17 +723,31 @@ Result Processor::DCache::DoOutgoingRequests()
     assert(!m_outgoing.Empty());
     const Request& request = m_outgoing.Front();
 
+    //FT-BEGIN
+    Thread& thread = m_threadTable[request.wid];
+    Family& family = m_familyTable[thread.family];
+    WClientID mtid;
+    if (family.redundant) //redundant thread
+        mtid = thread.mtid;
+    else
+        mtid = request.wid;
+    MCID mcid = m_mcid | (family.redundant << 2) | (mtid << 3);  //override bit 2 and tid (bit 3 - log2(#tt))
+    //FT-END
+	
     if (request.write)
     {
-        if (!m_memory.Write(m_mcid, request.address, request.data, request.wid))
+        if (!m_memory.Write(mcid, request.address, request.data, request.wid))
         {
             DeadlockWrite("Unable to send write to 0x%016llx to memory", (unsigned long long)request.address);
             return FAILED;
         }
+        //FT-BEGIN
+        DebugMemWrite("Write to cb from dcache m_outgoing: %#016llx", (unsigned long long)request.address);
+        //FT-END
     }
     else
     {
-        if (!m_memory.Read(m_mcid, request.address))
+        if (!m_memory.Read(mcid, request.address))
         {
             DeadlockWrite("Unable to send read to 0x%016llx to memory", (unsigned long long)request.address);
             return FAILED;
@@ -756,7 +781,8 @@ void Processor::DCache::Cmd_Read(std::ostream& out, const std::vector<std::strin
 {
     if (arguments.empty())
     {
-        out << "Cache type:          ";
+        out << "MCID:                " << dec << m_mcid << endl // [FT]
+            << "Cache type:          ";
         if (m_assoc == 1) {
             out << "Direct mapped" << endl;
         } else if (m_assoc == m_lines.size()) {

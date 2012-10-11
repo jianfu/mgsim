@@ -532,7 +532,7 @@ void MGSystem::Step(CycleNo nCycles)
         ss << "Stalled processes:" << endl;
 
         // See how many processes are in each of the states
-        unsigned int num_stalled = 0, num_running = 0;
+        unsigned int num_stalled = 0, num_running = 0, num_active = 0;
 
         for (const Clock* clock = m_kernel.GetActiveClocks(); clock != NULL; clock = clock->GetNext())
         {
@@ -546,6 +546,9 @@ void MGSystem::Step(CycleNo nCycles)
                     break;
                 case STATE_RUNNING:
                     ++num_running;
+                    break;
+                case STATE_ACTIVE:
+                    ++num_active;
                     break;
                 default:
                     assert(false);
@@ -567,7 +570,10 @@ void MGSystem::Step(CycleNo nCycles)
 
         ss << endl
            << "Deadlock! (at cycle " << m_kernel.GetCycleNo() << ')' << endl
-           << "(" << num_stalled << " processes stalled;  " << num_running << " processes running; "
+           << "("
+           << num_stalled << " processes stalled; "
+           << num_running << " processes running; "
+           << num_active << " processes active; "
            << num_regs << " registers waited on)";
         throw DeadlockException(ss.str());
     }
@@ -628,6 +634,11 @@ MGSystem::MGSystem(Config& config,
 
     const size_t numProcessorsPerFPU = config.getValue<size_t>("NumProcessorsPerFPU");
     const PSize  numFPUs             = (numProcessors + numProcessorsPerFPU - 1) / numProcessorsPerFPU;
+
+    //FT-BEGIN
+    assert (numProcessors%2==0);
+    const size_t numCBs = numProcessors / 2;
+    //FT-END
 
     string memory_type = config.getValue<string>("MemoryType");
     transform(memory_type.begin(), memory_type.end(), memory_type.begin(), ::toupper);
@@ -720,6 +731,25 @@ MGSystem::MGSystem(Config& config,
         clog << numFPUs << " FPUs instantiated." << endl;
     }
 
+    // FT-BEGIN
+    // Create the CBs
+    m_cbs.resize(numCBs);
+    for (size_t f = 0; f < numCBs; ++f)
+    {
+        stringstream cbname, leftname, rightname;
+        cbname << "cb" << f;
+        leftname << "cpu" << f * 2;
+        rightname << "cpu" << f * 2 + 1;
+        m_cbs[f] = new CompBuffer(cbname.str(), leftname.str(), rightname.str(), m_root, m_clock, *m_memory, config);
+
+        config.registerObject(*m_cbs[f], "cb");
+    }
+    if (!quiet)
+    {
+        clog << numCBs << " Comparison Buffers instantiated." << endl;
+    }
+    // FT-END
+
     // Create processor grid
     m_procs.resize(numProcessors);
     for (size_t i = 0; i < numProcessors; ++i)
@@ -748,7 +778,7 @@ MGSystem::MGSystem(Config& config,
             }
         }
 
-        m_procs[i]   = new Processor(name, m_root, m_clock, i, m_procs, *m_memory, *memadmin, fpu, iobus, config);
+        m_procs[i]   = new Processor(name, m_root, m_clock, i, m_procs, *m_cbs[i/2], *memadmin, fpu, iobus, config);
     }
     if (!quiet)
     {
@@ -851,13 +881,25 @@ MGSystem::MGSystem(Config& config,
 
     // Initialize the memory
     m_memory->Initialize();
+    //FT-BEGIN
+    // FIXME: Initialize CB here.
+    //FT-END
 
     // Connect processors in the link
     for (size_t i = 0; i < numProcessors; ++i)
     {
         Processor* prev = (i == 0)                 ? NULL : m_procs[i - 1];
         Processor* next = (i == numProcessors - 1) ? NULL : m_procs[i + 1];
-        m_procs[i]->Initialize(prev, next);
+
+        //FT-BEGIN
+        Processor* prev2 = (i <= 1 )                ? NULL : m_procs[i - 2];
+        Processor* next2 = (i >= numProcessors - 2) ? NULL : m_procs[i + 2];
+
+        Processor* prev3 = (i <= 2)                 ? NULL : m_procs[i - 3];
+        Processor* next3 = (i >= numProcessors - 3) ? NULL : m_procs[i + 3];
+        //FT-END
+
+        m_procs[i]->Initialize(prev3, prev2, prev, next, next2, next3);
         if (next)
             config.registerRelation(*m_procs[i], *next, "link", true);
     }
@@ -959,6 +1001,10 @@ MGSystem::~MGSystem()
         delete proc;
     for (auto fpu : m_fpus)
         delete fpu;
+    //FT-BEGIN
+    for (auto cb : m_cbs)
+        delete cb;
+    //FT-END
     delete m_selector;
     delete m_memory;
 }

@@ -57,11 +57,12 @@ namespace line {
 }
 
 class IMemory;
+typedef size_t MCID;    ///< Memory Client ID
 
 class IMemoryCallback
 {
 public:
-    virtual bool OnMemoryReadCompleted(MemAddr addr, const char* data) = 0;
+    virtual bool OnMemoryReadCompleted(MemAddr addr, const char* data, MCID mcid) = 0;
     virtual bool OnMemoryWriteCompleted(WClientID wid) = 0;
     virtual bool OnMemoryInvalidated(MemAddr addr) = 0;
     virtual bool OnMemorySnooped(MemAddr /* addr */, const char* /*data*/, const bool* /*mask*/) { return true; }
@@ -72,7 +73,6 @@ public:
     virtual Object& GetMemoryPeer() = 0;
 };
 
-typedef size_t MCID;    ///< Memory Client ID
 
 class IMemory
 {

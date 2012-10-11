@@ -43,7 +43,7 @@ unsigned char GetRegisterClass(unsigned char addr, const RegsNo& regs, RegClass*
     assert(regs.globals < 32);
     assert(regs.shareds < 32);
     assert(regs.locals  < 32);
-
+    
     if (addr < regs.locals)
     {
         *rc = RC_LOCAL;
@@ -126,7 +126,7 @@ void Processor::Pipeline::DecodeStage::DecodeInstruction(const Instruction& inst
     m_output.Ra     = INVALID_REG;
     m_output.Rb     = INVALID_REG;
     m_output.Rc     = INVALID_REG;
-
+    
     RegIndex Ra    = (instr >> A_RA_SHIFT) & A_REG_MASK;
     RegIndex Rb    = (instr >> A_RB_SHIFT) & A_REG_MASK;
     RegIndex Rc    = (instr >> A_RC_SHIFT) & A_REG_MASK;
@@ -195,7 +195,7 @@ void Processor::Pipeline::DecodeStage::DecodeInstruction(const Instruction& inst
 
             // Create (indirect) also reads Ra
             bool crei = (m_output.opcode == A_OP_CREATE_I);
-
+            
             m_output.Ra = MAKE_REGADDR(RT_INTEGER, crei ? Ra : 31);
             m_output.Rb = MAKE_REGADDR(RT_INTEGER, Rb);
             m_output.Rc = MAKE_REGADDR(RT_INTEGER, Ra);
@@ -236,7 +236,7 @@ void Processor::Pipeline::DecodeStage::DecodeInstruction(const Instruction& inst
             }
             break;
         }
-
+        
         case IFORMAT_OP:
         {
             // Integer operate instruction
@@ -255,7 +255,7 @@ void Processor::Pipeline::DecodeStage::DecodeInstruction(const Instruction& inst
             {
                 m_output.Rb = MAKE_REGADDR(RT_INTEGER, Rb);
             }
-
+            
             if (m_output.opcode == A_OP_UTHREAD)
             {
                 // Do not translate some register, we want its index as-is.
@@ -266,12 +266,19 @@ void Processor::Pipeline::DecodeStage::DecodeInstruction(const Instruction& inst
                     m_output.regofs = Rc;
                     m_output.Rc     = INVALID_REG;
                     break;
-
+                
                 case A_UTHREAD_GETG:
                 case A_UTHREAD_GETS:
                     m_output.regofs = Rb;
                     m_output.Rb     = INVALID_REG;
                     break;
+				
+                    //FT-BEGIN
+                    //Pair reads from and writes to Ra
+                case A_UTHREAD_PAIR:
+                    m_output.Rc = MAKE_REGADDR(RT_INTEGER, Ra);
+                    break;
+                    //FT-END
 
                 default:
                     break;
@@ -279,7 +286,7 @@ void Processor::Pipeline::DecodeStage::DecodeInstruction(const Instruction& inst
             }
             break;
         }
-
+        
         default:
             break;
     }
@@ -300,7 +307,7 @@ bool Processor::Pipeline::ExecuteStage::BranchTaken(uint8_t opcode, const PipeVa
         case A_OP_BNE : return ((int64_t)value.m_integer.get(value.m_size) != 0);
         case A_OP_BLBC: return ((value.m_integer.get(value.m_size) & 0x1) == 0);
         case A_OP_BLBS: return ((value.m_integer.get(value.m_size) & 0x1) == 1);
-
+        
         // Although, as described in the Alpha Handbook, section 4.9, FP branches are tested bitwise,
         // we're lazy and interpret them.
         case A_OP_FBEQ: return value.m_float.tofloat(value.m_size) == 0;
@@ -342,7 +349,7 @@ static void mul128b(uint64_t op1, uint64_t op2, uint64_t *resultH, uint64_t *res
     uint64_t z = x + y;
 
     uint64_t carry = (z < x || z < y) ? 1 : 0;
-
+  
     x = z;
     y = (op1H * op2L) << 32;
     z = x + y;
@@ -809,7 +816,7 @@ bool Processor::Pipeline::ExecuteStage::ExecuteFPTI(PipeValue& Rcv, const PipeVa
 {
     uint64_t Rav = Rav_.m_integer.get(Rav_.m_size);
     uint64_t Rbv = Rbv_.m_integer.get(Rbv_.m_size);
-
+    
     Rcv.m_state   = RST_FULL;
     Rcv.m_integer = 0;
     switch (func)
@@ -827,7 +834,7 @@ bool Processor::Pipeline::ExecuteStage::ExecuteFPTI(PipeValue& Rcv, const PipeVa
             Rcv.m_integer = count;
             break;
         }
-
+        
         // Count Population
         case A_FPTIFUNC_CTPOP:
         {
@@ -840,7 +847,7 @@ bool Processor::Pipeline::ExecuteStage::ExecuteFPTI(PipeValue& Rcv, const PipeVa
             Rcv.m_integer = count;
             break;
         }
-
+        
         // Count Trailing Zero
         case A_FPTIFUNC_CTTZ:
         {
@@ -854,7 +861,7 @@ bool Processor::Pipeline::ExecuteStage::ExecuteFPTI(PipeValue& Rcv, const PipeVa
             Rcv.m_integer = count;
             break;
         }
-
+        
         // Sign Extend
         case A_FPTIFUNC_SEXTB: Rcv.m_integer = (int64_t)( int8_t)Rbv; break;
         case A_FPTIFUNC_SEXTW: Rcv.m_integer = (int64_t)(int16_t)Rbv; break;
@@ -869,7 +876,7 @@ bool Processor::Pipeline::ExecuteStage::ExecuteFPTI(PipeValue& Rcv, const PipeVa
                 Rcv.m_integer = UnserializeRegister(RT_INTEGER, data, size);
                 break;
             }
-
+            
         // Pixel error
         case A_FPTIFUNC_PERR:
             for (int i = 0; i < 64; i += 8) {
@@ -878,7 +885,7 @@ bool Processor::Pipeline::ExecuteStage::ExecuteFPTI(PipeValue& Rcv, const PipeVa
                 Rcv.m_integer = Rcv.m_integer.get(Rcv.m_size) + (a >= b ? a - b : b - a);
             }
             break;
-
+       
         // Pack Bytes
         case A_FPTIFUNC_PKLB: Rcv.m_integer = (BITS<uint64_t>(Rbv,  0, 8) <<  0) | (BITS<uint64_t>(Rbv, 32, 8) <<  8); break;
         case A_FPTIFUNC_PKWB: Rcv.m_integer = (BITS<uint64_t>(Rbv,  0, 8) <<  0) | (BITS<uint64_t>(Rbv, 16, 8) <<  8) |
@@ -928,7 +935,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
 {
     uint64_t Rav = m_input.Rav.m_integer.get(m_input.Rav.m_size);
     uint64_t Rbv = m_input.Rbv.m_integer.get(m_input.Rbv.m_size);
-
+    
     switch (m_input.format)
     {
         case IFORMAT_BRA:
@@ -962,10 +969,10 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                         m_output.Rcv.m_state   = RST_FULL;
                     }
                 }
-
+                
                 // We've branched, ignore the thread end
                 COMMIT{ m_output.kill = false; }
-
+                
                 if (target != next)
                 {
                     COMMIT
@@ -986,12 +993,12 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
         {
             MemAddr next   = m_input.pc + sizeof(Instruction);
             MemAddr target = Rbv & -(MemAddr)sizeof(Instruction);
-
+            
             if (m_input.opcode == A_OP_CREATE_I)
-            {
-                return ExecCreate(m_parent.GetProcessor().UnpackFID(Rav), target, m_input.Rc.index);
-            }
-
+            {     
+                return ExecCreate(m_parent.GetProcessor().UnpackFID(Rav), target, m_input.Rc.index); 
+            }                    
+               
             // Unconditional Jumps
             COMMIT
             {
@@ -1063,7 +1070,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                         m_output.Rcv = m_input.Rav;
 
                         // Also remember the source operand (for memory debugging only)
-                        m_output.Ra  = m_input.Ra;
+                        m_output.Ra  = m_input.Ra; 
                     }
                 }
                 break;
@@ -1082,7 +1089,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                     switch (m_input.function)
                     {
                     case A_UTHREAD_LDBP: m_output.Rcv.m_integer = m_parent.GetProcessor().GetTLSAddress(m_input.fid, m_input.tid); break;
-                    case A_UTHREAD_LDFP:
+                    case A_UTHREAD_LDFP: 
                     {
                         const MemAddr tls_base = m_parent.GetProcessor().GetTLSAddress(m_input.fid, m_input.tid);
                         const MemAddr tls_size = m_parent.GetProcessor().GetTLSSize();
@@ -1096,7 +1103,15 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                     {
                         PlaceID place;
                         place.size = m_input.placeSize;
-                        place.pid  = m_parent.GetProcessor().GetPID() & -place.size;
+
+                        //FT-BEGIN
+                        Family& family = m_familyTable[m_input.fid];
+                        if ( place.size == 1 && family.redundant)//return the master's PID for reundant family when size is 1
+                            place.pid  = m_parent.GetProcessor().GetPID() + 1 - (m_parent.GetProcessor().GetPID()%2)*2;
+                        else 
+                        //FT-END
+                            place.pid  = m_parent.GetProcessor().GetPID() & -place.size;
+                        
                         place.capability = 0x1337; // later: find a proper substitute
                         m_output.Rcv.m_integer = m_parent.GetProcessor().PackPlace(place);
                         break;
@@ -1118,15 +1133,23 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
             else if ((m_input.function & A_UTHREAD_REMOTE_MASK) == A_UTHREAD_REMOTE_VALUE)
             {
                 const FID fid = m_parent.GetProcessor().UnpackFID(Rav);
+                //FT-BEGIN
+                const FID rfid = m_parent.GetProcessor().UnpackFID(Rbv);
+                //FT-END
                 switch (m_input.function)
                 {
                 case A_UTHREAD_SETSTART: return SetFamilyProperty(fid, FAMPROP_START, Rbv);
                 case A_UTHREAD_SETLIMIT: return SetFamilyProperty(fid, FAMPROP_LIMIT, Rbv);
                 case A_UTHREAD_SETSTEP:  return SetFamilyProperty(fid, FAMPROP_STEP,  Rbv);
                 case A_UTHREAD_SETBLOCK: return SetFamilyProperty(fid, FAMPROP_BLOCK, Rbv);
-                case A_UTHREAD_PUTG:     return WriteFamilyRegister(RRT_GLOBAL,          RT_INTEGER, fid, m_input.regofs);
-                case A_UTHREAD_PUTS:     return WriteFamilyRegister(RRT_FIRST_DEPENDENT, RT_INTEGER, fid, m_input.regofs);
-                case A_UTHREAD_DETACH:   return ExecDetach(fid);
+                case A_UTHREAD_PUTG:     return WriteFamilyRegister(RRT_GLOBAL,          RT_INTEGER, fid, m_input.regofs); 
+                case A_UTHREAD_PUTS:     return WriteFamilyRegister(RRT_FIRST_DEPENDENT, RT_INTEGER, fid, m_input.regofs); 
+                case A_UTHREAD_DETACH:   return ExecDetach(fid); 
+				
+                //FT-BEGIN
+                case A_UTHREAD_PAIR:     return ExecPair(fid, rfid, m_input.Rc.index);
+                case A_UTHREAD_RMTWR:    return ExecRmtwr(fid);
+                //FT-END
 
                 case A_UTHREAD_SYNC:     return ExecSync(fid);
                 case A_UTHREAD_GETG:     return ReadFamilyRegister(RRT_GLOBAL,      RT_INTEGER, fid, m_input.regofs);
@@ -1139,8 +1162,10 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                 PlaceID place  = m_parent.GetProcessor().UnpackPlace(Rav);
                 bool suspend   = (m_input.function & A_UTHREAD_ALLOC_S_MASK);
                 bool exclusive = (m_input.function & A_UTHREAD_ALLOC_X_MASK);
-
-                return ExecAllocate(place, m_input.Rc.index, suspend, exclusive, flags);
+                //FT-BEGIN
+                bool redundant = (m_input.function & A_UTHREAD_ALLOC_R_MASK);
+                //FT-END
+                return ExecAllocate(place, m_input.Rc.index, suspend, exclusive, redundant /*[FT]*/, flags);
             }
             else if ((m_input.function & A_UTHREAD_CREB_MASK) == A_UTHREAD_CREB_VALUE)
             {
@@ -1155,8 +1180,8 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                     ExecDebug(m_input.Rbv.m_float.tofloat(m_input.Rbv.m_size), Rav);
                 }
             }
-            else
-            {
+            else 
+            { 
                 const FID fid = m_parent.GetProcessor().UnpackFID(Rav);
                 switch(m_input.function)
                 {
@@ -1262,7 +1287,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
             else
             {
                 assert(fpuop != FPU_OP_NONE);
-
+                
                 // Dispatch long-latency operation to FPU
                 if (!m_fpu.QueueOperation(m_fpuSource, fpuop, 8,
                     m_input.Rav.m_float.tofloat(m_input.Rav.m_size),
@@ -1310,7 +1335,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                 // Read processor cycle count
             // NOTE: the Alpha spec specifies that the higher 32-bits
                 // are operating-system dependent. In our case we stuff
-                // extra precision from the cycle counter.
+                // extra precision from the cycle counter. 
                 COMMIT {
                     m_output.Rcv.m_state   = RST_FULL;
                     m_output.Rcv.m_integer = GetCycleNo();

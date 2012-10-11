@@ -19,6 +19,12 @@ struct RemoteMessage
         MSG_BREAK,          ///< Break
         MSG_RAW_REGISTER,   ///< Raw register response
         MSG_FAM_REGISTER,   ///< Family register request or response
+        //FT-BEGIN
+        MSG_ADDR_REGISTER,  ///< Abosolute register address in 'allocate' of redundant thread
+        MSG_RTHREADCOUNT,   ///< The distance of thread creation between master family and redundant family 
+        MSG_MASTERTID,      ///< The physic matching master tid for redundant thread
+        MSG_PAIR,           ///< Paring the master and redundant family
+        //FT-END
     };
 
     Type type;      ///< Type of the message
@@ -33,6 +39,9 @@ struct RemoteMessage
             AllocationType type;          ///< Type of the allocation
             bool           suspend;       ///< Queue request if no context available?
             bool           exclusive;     ///< Allocate the exclusive context?
+            //FT-BEGIN
+            bool           redundant; 
+            //FT-END
             Bundle         bundle;        ///< Bundle information (if bundled)
         } allocate;
 
@@ -85,6 +94,38 @@ struct RemoteMessage
             RemoteRegType kind;
             bool          write;
         } famreg;
+		
+        //FT-BEGIN
+        struct
+        {
+            PID           pid;
+            TID           tid;
+            RegIndex      index;
+        } addrreg;
+
+        struct
+        {
+            PID           pid;
+            LFID          lfid;
+            TID           tid; //for debug
+        } rtc;
+
+        struct
+        {
+            PID           pid;
+            LFID          lfid;
+            TID           tid;
+            uint64_t      index;
+        } mtid;
+
+        struct
+        {
+            FID          mfid;
+            FID          rfid;
+            RegIndex     completion_reg;
+            PID          completion_pid;
+        } pair;
+        //FT-END
     };
 
     std::string str() const;
@@ -103,9 +144,16 @@ struct LinkMessage
         MSG_DETACH,         ///< Detach family
         MSG_BREAK,          ///< Break
         MSG_GLOBAL,         ///< Global register data
+        //FT-BEGIN
+        MSG_PAIR,           ///< Paring the master and redundant family
+        //FT-END
     };
 
     Type type;      ///< Type of the message
+
+    //FT-BEGIN
+    bool redundant; 
+    //FT-END   
 
     /// The message contents
     union
@@ -174,6 +222,17 @@ struct LinkMessage
             RegAddr  addr;
             LFID     fid;
         } global;
+        
+        //FT-BEGIN
+        struct
+        {
+            LFID         mlfid;
+            LFID         rlfid;
+            RegIndex     completion_reg;
+            PID          completion_pid;
+            Integer      first_fid;
+        } pair;
+        //FT-END
     };
 
     std::string str() const;
@@ -187,9 +246,16 @@ struct AllocResponse
 
     LFID     prev_fid;  ///< FID of the family on the previous (receiver) core
     LFID     next_fid;  ///< FID of the family on the next (sender) core if !failed
+    //FT-BEGIN
+    LFID     nnext_fid;
+    //FT-END
 
     PSize    numCores;  ///< Number of cores actually allocated (0 for failed)
     bool     exact;     ///< If the allocate was exact, unwind all the way
+	
+    //FT-BEGIN
+    bool     redundant; 
+    //FT-END  
 };
 
 class Network : public Object, public Inspect::Interface<Inspect::Read>
@@ -295,7 +361,7 @@ public:
     Network(const Network&) = delete;
     Network& operator=(const Network&) = delete;
 
-    void Initialize(Network* prev, Network* next);
+    void Initialize(Network* prev3, Network* prev2, Network* prev, Network* next, Network* next2, Network* next3); // [FT]
 
     bool SendMessage(const RemoteMessage& msg);
     bool SendMessage(const LinkMessage& msg);
@@ -325,6 +391,10 @@ private:
     Result DoDelegationOut();
     Result DoDelegationIn();
     Result DoSyncs();
+    //FT-BEGIN
+    Result DorLink();
+    Result DorAllocResponse();
+    //FT-END
 
     Processor&                     m_parent;
     RegisterFile&                  m_regFile;
@@ -347,6 +417,13 @@ public:
     RegisterPair<LinkMessage>   m_link;           ///< Forward link through the cores
     RegisterPair<AllocResponse> m_allocResponse;  ///< Backward link for allocation unroll/commit
 
+
+	
+    //FT-BEGIN
+    RegisterPair<LinkMessage>   m_rlink;           
+    RegisterPair<AllocResponse> m_rallocResponse;  
+    //FT-END
+	
     // Synchronizations destined for outgoing delegation network.
     // We need this buffer to break the circular depedency between the
     // link and delegation network.
@@ -357,6 +434,12 @@ public:
     Process p_DelegationIn;
     Process p_Link;
     Process p_AllocResponse;
+   
+    //FT-BEGIN
+    Process p_rLink;
+    Process p_rAllocResponse;
+    //FT-END
+
     Process p_Syncs;
 };
 
