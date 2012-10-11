@@ -20,6 +20,8 @@ Processor::DCache::DCache(const std::string& name, Processor& parent, Clock& clo
 //FT-END
     m_regFile(regFile),
     m_memory(memory),
+    m_mcid(0),
+    m_lines(),
 
     m_assoc          (config.getValue<size_t>(*this, "Associativity")),
     m_sets           (config.getValue<size_t>(*this, "NumSets")),
@@ -28,6 +30,7 @@ Processor::DCache::DCache(const std::string& name, Processor& parent, Clock& clo
     m_completed      ("b_completed", *this, clock, m_sets * m_assoc),
     m_incoming       ("b_incoming",  *this, clock, config.getValue<BufferSize>(*this, "IncomingBufferSize")),
     m_outgoing       ("b_outgoing",  *this, clock, config.getValue<BufferSize>(*this, "OutgoingBufferSize")),
+    m_wbstate(),
     m_numRHits        (0),
     m_numDelayedReads (0),
     m_numEmptyRMisses (0),
@@ -60,7 +63,7 @@ Processor::DCache::DCache(const std::string& name, Processor& parent, Clock& clo
     RegisterSampleVariableInObject(m_numStallingRMisses, SVC_CUMULATIVE);
     RegisterSampleVariableInObject(m_numStallingWMisses, SVC_CUMULATIVE);
     RegisterSampleVariableInObject(m_numPassThroughWMisses, SVC_CUMULATIVE);
-    
+
     StorageTraceSet traces;
     m_mcid = m_memory.RegisterClient(*this, p_Outgoing, traces, m_incoming, true);
     p_Outgoing.SetStorageTraces(traces);
@@ -68,7 +71,7 @@ Processor::DCache::DCache(const std::string& name, Processor& parent, Clock& clo
     m_completed.Sensitive(p_CompletedReads);
     m_incoming.Sensitive(p_Incoming);
     m_outgoing.Sensitive(p_Outgoing);
-    
+
     // These things must be powers of two
     if (m_assoc == 0 || !IsPowerOfTwo(m_assoc))
     {
@@ -99,7 +102,7 @@ Processor::DCache::DCache(const std::string& name, Processor& parent, Clock& clo
         m_lines[i].valid  = new bool[m_lineSize];
         m_lines[i].create = false;
     }
-    
+
     m_wbstate.size   = 0;
     m_wbstate.offset = 0;
 }
@@ -127,7 +130,7 @@ Result Processor::DCache::FindLine(MemAddr address, Line* &line, bool check_only
     for (size_t i = 0; i < m_assoc; ++i)
     {
         line = &m_lines[set + i];
-        
+
         // Invalid lines may not be touched or considered
         if (line->state == LINE_EMPTY)
         {
@@ -181,7 +184,7 @@ Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAdd
     size_t offset = (size_t)(address % m_lineSize);
     if (offset + size > m_lineSize)
     {
-        throw exceptf<InvalidArgumentException>(*this, "Read (%#016llx, %zd): Address range crosses over cache line boundary", 
+        throw exceptf<InvalidArgumentException>(*this, "Read (%#016llx, %zd): Address range crosses over cache line boundary",
                                                 (unsigned long long)address, (size_t)size);
     }
 
@@ -220,7 +223,7 @@ Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAdd
         ++m_numHardConflicts;
         return FAILED;
     }
-    
+
     // Update last line access
     COMMIT{ line->access = GetCycleNo(); }
 
@@ -242,14 +245,14 @@ Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAdd
         }
 
         // statistics
-        COMMIT { 
+        COMMIT {
             if (line->state == LINE_EMPTY)
                 ++m_numEmptyRMisses;
             else
-                ++m_numResolvedConflicts; 
+                ++m_numResolvedConflicts;
         }
     }
-    else 
+    else
     {
         // Check if the data that we want is valid in the line.
         // This happens when the line is FULL, or LOADING and has been
@@ -262,18 +265,18 @@ Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAdd
                 break;
             }
         }
-        
+
         if (i == size)
         {
             // Data is entirely in the cache, copy it
             COMMIT
             {
-                memcpy(data, line->data + offset, (size_t)size);                
+                memcpy(data, line->data + offset, (size_t)size);
                 ++m_numRHits;
             }
             return SUCCESS;
         }
-        
+
         // Data is not entirely in the cache; it should be loading from memory
         if (line->state != LINE_LOADING)
         {
@@ -299,7 +302,7 @@ Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAdd
             *reg = old;
         }
         else
-        {    
+        {
             line->create  = true;
         }
 
@@ -317,7 +320,7 @@ Result Processor::DCache::Write(MemAddr address, void* data, MemSize size, LFID 
     size_t offset = (size_t)(address % m_lineSize);
     if (offset + size > m_lineSize)
     {
-        throw exceptf<InvalidArgumentException>(*this, "Write (%#016llx, %zd): Address range crosses over cache line boundary", 
+        throw exceptf<InvalidArgumentException>(*this, "Write (%#016llx, %zd): Address range crosses over cache line boundary",
                                                 (unsigned long long)address, (size_t)size);
     }
 
@@ -342,7 +345,7 @@ Result Processor::DCache::Write(MemAddr address, void* data, MemSize size, LFID 
                       (unsigned long long)address, (size_t)size);
         return FAILED;
     }
-    
+
     Line* line = NULL;
     Result result = FindLine(address, line, true);
     if (result == SUCCESS)
@@ -360,7 +363,7 @@ Result Processor::DCache::Write(MemAddr address, void* data, MemSize size, LFID 
             // request, because read completion goes on address, and then we would have
             // multiple lines of the same address.
             //
-            
+
             // So for now, just stall the write
             ++m_numLoadingWMisses;
             DeadlockWrite("Unable to write into loading cache line");
@@ -370,7 +373,7 @@ Result Processor::DCache::Write(MemAddr address, void* data, MemSize size, LFID 
         {
             // Update the line
             assert(line->state == LINE_FULL);
-            COMMIT{ 
+            COMMIT{
                 std::copy((char*)data, (char*)data + size, line->data + offset);
                 std::fill(line->valid + offset, line->valid + offset + size, true);
 
@@ -379,11 +382,11 @@ Result Processor::DCache::Write(MemAddr address, void* data, MemSize size, LFID 
             }
         }
     }
-    else 
+    else
     {
         COMMIT{ ++m_numPassThroughWMisses; }
     }
-    
+
     // Store request for memory (pass-through)
     Request request;
     request.write     = true;
@@ -406,7 +409,7 @@ Result Processor::DCache::Write(MemAddr address, void* data, MemSize size, LFID 
     //FT-BEGIN
     DebugMemWrite("Write to m_outgoing from dcache: %#016llx", (unsigned long long)request.address);
     //FT-END
-    
+
     COMMIT{ ++m_numWAccesses; }
 
     return DELAYED;
@@ -425,7 +428,7 @@ bool Processor::DCache::OnMemoryReadCompleted(MemAddr addr, const char* data, MC
         // Registers are waiting on this data
         COMMIT
         {
-            /*        
+            /*
                       Merge with pending writes because the incoming line
                       will not know about those yet and we don't want inconsistent
                       content in L1.
@@ -433,7 +436,7 @@ bool Processor::DCache::OnMemoryReadCompleted(MemAddr addr, const char* data, MC
                       is questionable.
             */
             char mdata[m_lineSize];
-                
+
             std::copy(data, data + m_lineSize, mdata);
 
             for (Buffer<Request>::const_iterator p = m_outgoing.begin(); p != m_outgoing.end(); ++p)
@@ -449,7 +452,7 @@ bool Processor::DCache::OnMemoryReadCompleted(MemAddr addr, const char* data, MC
             // Mask by valid bytes (don't overwrite already written data).
             line::blitnot(line->data, mdata, line->valid, m_lineSize);
             line::setifnot(line->valid, true, line->valid, m_lineSize);
-            
+
             line->processing = true;
         }
 
@@ -471,7 +474,7 @@ bool Processor::DCache::OnMemoryWriteCompleted(WClientID wid)
     // Data has been written
     if (wid != INVALID_WCLIENTID) // otherwise for DCA
     {
-		Response response;
+        Response response;
         response.write = true;
         response.wid  =  wid;
         if (!m_incoming.Push(response))
@@ -541,6 +544,11 @@ bool Processor::DCache::OnMemoryInvalidated(MemAddr address)
     return true;
 }
 
+Object& Processor::DCache::GetMemoryPeer()
+{
+    return m_parent;
+}
+
 Result Processor::DCache::DoCompletedReads()
 {
     assert(!m_completed.Empty());
@@ -560,7 +568,7 @@ Result Processor::DCache::DoCompletedReads()
         if (state.offset == state.size)
         {
             // Starting a new multi-register write
-        
+
             // Write to register
             if (!m_regFile.p_asyncW.Write(line.waiting))
             {
@@ -575,7 +583,7 @@ Result Processor::DCache::DoCompletedReads()
                 DeadlockWrite("Unable to read register %s", line.waiting.str().c_str());
                 return FAILED;
             }
-        
+
             if (value.m_state == RST_FULL || value.m_memory.size == 0)
             {
                 // Rare case: the request info is still in the pipeline, stall!
@@ -648,11 +656,11 @@ Result Processor::DCache::DoCompletedReads()
             DeadlockWrite("Unable to write register %s", state.addr.str().c_str());
             return FAILED;
         }
-        
+
         // Update writeback state
         state.offset++;
         state.addr.index++;
-        
+
         if (state.offset == state.size)
         {
             // This operand is now fully written
@@ -682,7 +690,7 @@ Result Processor::DCache::DoCompletedReads()
     }
     return SUCCESS;
 }
-        
+
 Result Processor::DCache::DoIncomingResponses()
 {
     assert(!m_incoming.Empty());
@@ -763,7 +771,7 @@ void Processor::DCache::Cmd_Info(std::ostream& out, const std::vector<std::strin
     "Supported operations:\n"
     "- inspect <component>\n"
     "  Display global information such as hit-rate and configuration.\n"
-    "- inspect <component> buffers\n" 
+    "- inspect <component> buffers\n"
     "  Reads and display the outgoing request buffer.\n"
     "- inspect <component> lines\n"
     "  Reads and displays the cache-lines.\n";
@@ -782,7 +790,7 @@ void Processor::DCache::Cmd_Read(std::ostream& out, const std::vector<std::strin
         } else {
             out << dec << m_assoc << "-way set associative" << endl;
         }
-        
+
         out << "L1 bank mapping:     " << m_selector->GetName() << endl
             << "Cache size:          " << dec << (m_lineSize * m_lines.size()) << " bytes" << endl
             << "Cache line size:     " << dec << m_lineSize << " bytes" << endl
@@ -812,9 +820,9 @@ void Processor::DCache::Cmd_Read(std::ostream& out, const std::vector<std::strin
                 << "Number of snoops from siblings:       " << m_numSnoops  << endl
                 << "Number of stalled cycles:             " << numStalls    << endl
                 << endl;
-                
+
 #define PRINTVAL(X, q) dec << (X) << " (" << setprecision(2) << fixed << (X) * q << "%)"
-            
+
             float r_factor = 100.0f / numRAccesses;
             out << "***********************************************************" << endl
                 << "                      Cache reads                          " << endl
@@ -823,13 +831,13 @@ void Processor::DCache::Cmd_Read(std::ostream& out, const std::vector<std::strin
                 << "Number of read requests from client:                " << numRAccesses << endl
                 << "Read hits:                                          " << PRINTVAL(m_numRHits, r_factor) << endl
                 << "Read misses:                                        " << PRINTVAL(m_numDelayedReads, r_factor) << endl
-                << "Breakdown of read misses:" << endl                  
+                << "Breakdown of read misses:" << endl
                 << "- to an empty line:                                 " << PRINTVAL(m_numEmptyRMisses, r_factor) << endl
                 << "- to a loading line with same tag:                  " << PRINTVAL(m_numLoadingRMisses, r_factor) << endl
                 << "- to a reusable line with different tag (conflict): " << PRINTVAL(m_numResolvedConflicts, r_factor) << endl
                 << "(percentages relative to " << numRAccesses << " read requests)" << endl
                 << endl;
-            
+
             float w_factor = 100.0f / m_numWAccesses;
             out << "***********************************************************" << endl
                 << "                      Cache writes                         " << endl
@@ -841,8 +849,8 @@ void Processor::DCache::Cmd_Read(std::ostream& out, const std::vector<std::strin
                 << "- to a an empty line or line with different tag (pass-through): " << PRINTVAL(m_numPassThroughWMisses, w_factor) << endl
                 << "(percentages relative to " << m_numWAccesses << " write requests)" << endl
                 << endl;
-            
-            float q_factor = 100.0f / numRqst;                
+
+            float q_factor = 100.0f / numRqst;
             out << "***********************************************************" << endl
                 << "                      Requests to upstream                 " << endl
                 << "***********************************************************" << endl
@@ -852,17 +860,17 @@ void Processor::DCache::Cmd_Read(std::ostream& out, const std::vector<std::strin
                 << "Write requests:                 " << PRINTVAL(numWRqst, q_factor) << endl
                 << "(percentages relative to " << numRqst << " requests)" << endl
                 << endl;
-                
-                
+
+
             if (numStalls != 0)
             {
-                float s_factor = 100.f / numStalls;   
+                float s_factor = 100.f / numStalls;
                 out << "***********************************************************" << endl
                     << "                      Stall cycles                         " << endl
                     << "***********************************************************" << endl
                     << endl
                     << "Number of stall cycles:               " << numStalls << endl
-                    << "Read-related stalls:                  " << PRINTVAL(numRStalls, s_factor) << endl 
+                    << "Read-related stalls:                  " << PRINTVAL(numRStalls, s_factor) << endl
                     << "Write-related stalls:                 " << PRINTVAL(numWStalls, s_factor) << endl
                     << "Breakdown of read-related stalls:" << endl
                     << "- read conflict to non-reusable line: " << PRINTVAL(m_numHardConflicts, s_factor) << endl
@@ -874,7 +882,7 @@ void Processor::DCache::Cmd_Read(std::ostream& out, const std::vector<std::strin
                     << "(percentages relative to " << numStalls << " stall cycles)" << endl
                     << endl;
             }
-             
+
         }
         return;
     }
@@ -921,7 +929,7 @@ void Processor::DCache::Cmd_Read(std::ostream& out, const std::vector<std::strin
         } else {
             out << " | "
                 << hex << "0x" << setw(16) << setfill('0') << m_selector->Unmap(line.tag, set) * m_lineSize;
-            
+
             switch (line.state)
             {
                 case LINE_LOADING: out << "L"; break;
@@ -938,7 +946,7 @@ void Processor::DCache::Cmd_Read(std::ostream& out, const std::vector<std::strin
                 waiting.push_back(reg);
                 RegValue value;
                 m_regFile.ReadRegister(reg, value, true);
-                
+
                 if (value.m_state == RST_FULL || value.m_memory.size == 0)
                 {
                     // Rare case: the request info is still in the pipeline, stall!
@@ -973,20 +981,20 @@ void Processor::DCache::Cmd_Read(std::ostream& out, const std::vector<std::strin
                 }
 
                 out << " |";
-                
+
                 // Print waiting registers for this line
                 for (int w = 0; w < nWaitingPerLine; ++w)
                 {
                     size_t index = y / BYTES_PER_LINE * nWaitingPerLine + w;
                     if (index < waiting.size())
                     {
-                        RegAddr reg = waiting[index];
+                        RegAddr wreg = waiting[index];
                         out << " ";
-                        if (reg == INVALID_REG) out << "[...]"; // And possibly others
-                        else out << reg.str();
+                        if (wreg == INVALID_REG) out << "[...]"; // And possibly others
+                        else out << wreg.str();
                     }
                 }
-                
+
                 if (y + BYTES_PER_LINE < m_lineSize) {
                     // This was not yet the last line
                     out << endl << "    |                     |";

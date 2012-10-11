@@ -41,17 +41,17 @@ class BankedMemory::Bank : public Object
     Process             p_Incoming;
     Process             p_Outgoing;
     Process             p_Bank;
-    
+
     bool AddRequest(Buffer<Request>& queue, Request& request, bool data)
     {
         COMMIT
         {
             const std::pair<CycleNo, CycleNo> delay = m_memory.GetMessageDelay(data ? request.size : 0);
             const CycleNo                     now   = GetCycleNo();
-            
+
             // Get the arrival time of the first bits
             request.done = now + delay.first;
-    
+
             Buffer<Request>::const_reverse_iterator p = queue.rbegin();
             if (p != queue.rend() && request.done < p->done)
             {
@@ -59,23 +59,23 @@ class BankedMemory::Bank : public Object
                 // (pretend our data comes after the data of the previous message)
                 request.done = p->done;
             }
-    
+
             // Add the time it takes the message body to traverse the network
             request.done += delay.second;
         }
-    
+
         if (!queue.Push(request))
         {
             return false;
         }
         return true;
     }
-    
+
     Result DoIncoming()
     {
         // Handle incoming requests
         assert(!m_incoming.Empty());
-        
+
         const CycleNo  now     = GetCycleNo();
         const Request& request = m_incoming.Front();
         if (now >= request.done)
@@ -85,14 +85,14 @@ class BankedMemory::Bank : public Object
             {
                 return FAILED;
             }
-                    
+
             m_request = request;
             m_request.done = now + m_memory.GetMemoryDelay(request.size);
             if (!m_busy.Set())
             {
                 return FAILED;
             }
-            
+
             m_incoming.Pop();
         }
         return SUCCESS;
@@ -102,7 +102,7 @@ class BankedMemory::Bank : public Object
     {
         // Handle outgoing requests
         assert(!m_outgoing.Empty());
-        
+
         const CycleNo  now     = GetCycleNo();
         const Request& request = m_outgoing.Front();
         if (now >= request.done)
@@ -112,7 +112,7 @@ class BankedMemory::Bank : public Object
             {
                 return FAILED;
             }
-                
+
             if (request.write) {
                 if (!request.client->callback->OnMemoryWriteCompleted(request.wid)) {
                     return FAILED;
@@ -122,12 +122,12 @@ class BankedMemory::Bank : public Object
                     return FAILED;
                 }
             }
-            
+
             m_outgoing.Pop();
         }
         return SUCCESS;
     }
-    
+
     Result DoRequest()
     {
         // Process the bank itself
@@ -146,7 +146,7 @@ class BankedMemory::Bank : public Object
             {
                 return FAILED;
             }
-            
+
             if (!m_busy.Clear())
             {
                 return FAILED;
@@ -164,7 +164,7 @@ class BankedMemory::Bank : public Object
 
         if (request.write) {
             out << "Write";
-        } else { 
+        } else {
             out << "Read ";
         }
         out << " | " << setw(8) << dec << request.done << " |";
@@ -174,17 +174,17 @@ class BankedMemory::Bank : public Object
             for (size_t x = 0; x < request.size; ++x)
             {
                 out << " ";
-                if (request.data.mask[x])                    
+                if (request.data.mask[x])
                     out << setw(2) << (unsigned)(unsigned char)request.data.data[x];
                 else
                     out << "--";
             }
         }
         else
-            out << "                         ";                
+            out << "                         ";
 
         out << " | ";
-    
+
         Object* obj = dynamic_cast<Object*>(request.client->callback);
         if (obj == NULL) {
             out << "???";
@@ -198,21 +198,21 @@ public:
     void RegisterClient(ArbitratedService<>& client_arbitrator, Process& process, StorageTraceSet& traces, const StorageTraceSet& storages)
     {
         p_incoming.AddProcess(process);
-        
+
         p_Outgoing.SetStorageTraces(storages);
-        
+
         client_arbitrator.AddProcess(p_Outgoing);
 
         traces ^= m_incoming;
     }
-    
+
     bool AddIncomingRequest(Request& request)
     {
         if (!p_incoming.Invoke())
         {
             return false;
         }
-    
+
         return AddRequest(m_incoming, request, request.write);
     }
 
@@ -242,7 +242,7 @@ public:
         }
         out << endl;
     }
-    
+
     Bank(const std::string& name, BankedMemory& memory, Clock& clock, BufferSize buffersize)
         : Object(name, memory, clock),
           m_memory  (memory),
@@ -250,6 +250,7 @@ public:
           m_incoming("b_incoming", *this, clock, buffersize),
           m_outgoing("b_outgoing", *this, clock, buffersize),
           m_busy    ("f_busy", *this, clock, false),
+          m_request(),
           p_Incoming(*this, "in",   delegate::create<Bank, &Bank::DoIncoming>(*this)),
           p_Outgoing(*this, "out",  delegate::create<Bank, &Bank::DoOutgoing>(*this)),
           p_Bank    (*this, "bank", delegate::create<Bank, &Bank::DoRequest> (*this))
@@ -257,7 +258,7 @@ public:
         m_incoming.Sensitive( p_Incoming );
         m_outgoing.Sensitive( p_Outgoing );
         m_busy    .Sensitive( p_Bank );
-        
+
         p_Incoming.SetStorageTraces(opt(m_busy));
         p_Bank.SetStorageTraces(opt(m_outgoing));
     }
@@ -279,7 +280,7 @@ CycleNo BankedMemory::GetMemoryDelay(size_t data_size) const
 {
     return m_baseRequestTime + m_timePerLine * (data_size + m_lineSize - 1) / m_lineSize;
 }
-                        
+
 MCID BankedMemory::RegisterClient(IMemoryCallback& callback, Process& process, StorageTraceSet& traces, Storage& storage, bool /*ignored*/)
 {
 #ifndef NDEBUG
@@ -287,7 +288,7 @@ MCID BankedMemory::RegisterClient(IMemoryCallback& callback, Process& process, S
         assert(m_clients[i].callback != &callback);
     }
 #endif
-    
+
     MCID id = m_clients.size();
 
     stringstream name;
@@ -342,7 +343,7 @@ bool BankedMemory::Read(MCID id, MemAddr address)
 //FT-BEGIN
     request.mcid      = id;
 //FT-END
-    
+
     Bank& bank = *m_banks[ bank_index ];
     if (!bank.AddIncomingRequest(request))
     {
@@ -354,7 +355,7 @@ bool BankedMemory::Read(MCID id, MemAddr address)
 }
 
 bool BankedMemory::Write(MCID id, MemAddr address, const MemData& data, WClientID wid)
-{   
+{
     assert(address % m_lineSize == 0);
 
     // Client should have been registered
@@ -379,7 +380,7 @@ bool BankedMemory::Write(MCID id, MemAddr address, const MemData& data, WClientI
             return false;
         }
     }
-    
+
     size_t bank_index;
     MemAddr unused;
     m_selector->Map(address / m_lineSize, unused, bank_index);
@@ -394,11 +395,13 @@ bool BankedMemory::Write(MCID id, MemAddr address, const MemData& data, WClientI
     return true;
 }
 
-BankedMemory::BankedMemory(const std::string& name, Object& parent, Clock& clock, Config& config, const std::string& defaultBankSelectorType) 
+BankedMemory::BankedMemory(const std::string& name, Object& parent, Clock& clock, Config& config, const std::string& defaultBankSelectorType)
     : Object(name, parent, clock),
       m_registry(config),
       m_clock(clock),
-      m_banks          (config.getValueOrDefault<size_t>(*this, "NumBanks", 
+      m_clients(),
+      m_storages(),
+      m_banks          (config.getValueOrDefault<size_t>(*this, "NumBanks",
                                                          config.getValue<size_t>("NumProcessors"))),
       m_baseRequestTime(config.getValue<CycleNo>(*this, "BaseRequestTime")),
       m_timePerLine    (config.getValue<CycleNo>(*this, "TimePerLine")),
@@ -410,16 +413,16 @@ BankedMemory::BankedMemory(const std::string& name, Object& parent, Clock& clock
       m_nwrite_bytes   (0)
 {
     const BufferSize buffersize = config.getValue<BufferSize>(*this, "BufferSize");
-    
+
     config.registerObject(*this, "bmem");
     config.registerProperty(*this, "selector", m_selector->GetName());
-        
-    // Create the banks   
+
+    // Create the banks
     for (size_t i = 0; i < m_banks.size(); ++i)
     {
-        stringstream name;
-        name << "bank" << i;
-        m_banks[i] = new Bank(name.str(), *this, clock, buffersize);
+        stringstream sname;
+        sname << "bank" << i;
+        m_banks[i] = new Bank(sname.str(), *this, clock, buffersize);
 
         config.registerObject(*m_banks[i], "bank");
         config.registerRelation(*this, *m_banks[i], "bank");
@@ -473,7 +476,7 @@ void BankedMemory::Cmd_Read(ostream& out, const vector<string>& arguments) const
         {
             m_banks[i]->Print(out);
         }
-    }    
+    }
 }
 
 }
