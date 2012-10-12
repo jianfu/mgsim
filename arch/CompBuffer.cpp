@@ -436,7 +436,7 @@ Result CompBuffer::DoIncoming()
                 wid1    = response.wid0;
             }
 
-            if (client0 == 0) //only one client is valid
+            if (client0 == 0) //only one client is valid, because 0 is not a invalid dcache index, usually it is 1st core's icache.
             {
                 if (!m_clients[client1]->OnMemoryWriteCompleted(wid1))
                 {
