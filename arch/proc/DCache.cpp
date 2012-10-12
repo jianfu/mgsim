@@ -731,7 +731,8 @@ Result Processor::DCache::DoOutgoingRequests()
         mtid = thread.mtid;
     else
         mtid = request.wid;
-    MCID mcid = m_mcid | (family.redundant << 2) | (mtid << 3);  //override bit 2 and tid (bit 3 - log2(#tt))
+	//if it is out of FT scope, tag this write as non-dcache, write pass through cb
+    MCID mcid = m_mcid |  (mtid << 3) | (family.redundant << 2)  | (family.ftmode);  //override bit 2 and tid (bit 3 - log2(#tt))
     //FT-END
 	
     if (request.write)

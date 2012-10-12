@@ -100,6 +100,7 @@ struct Family
     bool         redundant;
     LFID         corr_fid;
     TSize        rthreadCount;   //The distance of thread creation between master family and redundant family
+	bool		 ftmode;
     //FT-END
 	
     // Admin

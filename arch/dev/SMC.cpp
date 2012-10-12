@@ -125,7 +125,7 @@ namespace Simulator
 
     Result SMC::DoBoot()
     {
-        DebugIOWrite("Sending boot signal to processor %s and processor %s", m_cpu->GetName().c_str(), m_cpu1->GetName().c_str());
+        DebugIOWrite("Sending boot signal to processor %s", m_cpu->GetName().c_str());
 
         COMMIT {
             MemAddr prog_start;

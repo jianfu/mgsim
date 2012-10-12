@@ -724,6 +724,7 @@ FCapability Processor::Allocator::InitializeFamily(LFID fid) const
         family.redundant     = false;
         family.corr_fid      = INVALID_LFID;
         family.rthreadCount  = 0;
+		family.ftmode		 = 1;  //start ft mode from __mt_main, except the initial family.
         //FT-END
 
         // Dependencies
@@ -2367,8 +2368,9 @@ void Processor::Allocator::AllocateInitialFamily(MemAddr pc, bool legacy, PSize 
     family.state         = FST_ACTIVE;
     family.start         = startIndex;
     //FT-BEGIN
-    family.redundant     = m_parent.GetPID();
-    family.corr_fid      = 0;
+    //family.redundant     = 0;
+    //family.corr_fid      = 0;
+	family.ftmode		 = 0;
     //FT-END
 	
 
