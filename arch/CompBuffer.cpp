@@ -223,7 +223,7 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
                     temprequest.write     = true;
                     temprequest.address   = templine.address;
                     temprequest.data      = templine.data;
-                    temprequest.wid           = (templine.wid << 48) | (templine.client << 32) | (temp_wid << 16) | temp_client;
+                    temprequest.wid           = (templine.wid << 24) | (templine.client << 16) | (temp_wid << 8) | temp_client;
                     if (!m_transfer.Push(temprequest))
                     {
                         DeadlockWrite("Unable to push request to transfer buffer, CB.");
@@ -247,7 +247,7 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
     //wid0 | client0 | wid1 | client1
     //0 is the current client who call this function
     //1 is the client of the line in CB
-    request.wid               = (wid << 48) | ((id >> (m_bufferindexbits + 3)) << 32) | (temp_wid << 16) | temp_client;     //wid contains the client index for l1 in CB (id)
+    request.wid               = (wid << 24) | ((id >> (m_bufferindexbits + 3)) << 16) | (temp_wid << 8) | temp_client;     //wid contains the client index for l1 in CB (id)
     if (!m_outgoing.Push(request))
     {
         DeadlockWrite("Unable to push request to outgoing buffer, CB.");
@@ -313,10 +313,10 @@ bool CompBuffer::OnMemoryWriteCompleted(WClientID wid)
 {
     Response response;
     response.type           = WRITE;
-    response.wid0           = wid >> 48;
-    response.client0        = (wid >> 32) & (((size_t) 1 << 16) - 1);
-    response.wid1           = (wid >> 16) & (((size_t) 1 << 16) - 1);
-    response.client1        = wid         & (((size_t) 1 << 16) - 1);
+    response.wid0           = wid >> 24;
+    response.client0        = (wid >> 16) & (((size_t) 1 << 8) - 1);
+    response.wid1           = (wid >> 8 ) & (((size_t) 1 << 8) - 1);
+    response.client1        = wid         & (((size_t) 1 << 8) - 1);
 
     if (!m_incoming.Push(response))
     {
@@ -408,7 +408,7 @@ Result CompBuffer::DoIncoming()
 
     case WRITE:
     {
-        if (response.wid0 == (((size_t) 1 << 16) - 1))  //DCA
+        if (response.wid0 == (((unsigned) 1 << 8) - 1))  //DCA
         {
             if (!m_clients[response.client0]->OnMemoryWriteCompleted(INVALID_WCLIENTID))
             {
