@@ -196,8 +196,8 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
                     {
                         if(line.data.mask[i] != templine.data.mask[i])
                         {
-                            DebugMemWrite("cb%u: %#016llx, Comparison failed because of mask!", (unsigned)m_mcid, (unsigned long long)address);
-                            return false;  //Error.  Mask are not same.
+                            throw exceptf<SimulationException>(*this, "cb%u: %#016llx, Comparison failed because of mask!", (unsigned)m_mcid, (unsigned long long)address);
+							//return false;  //Error.  Mask are not same.
                         }
                     }
                     //mask are same.
@@ -207,8 +207,8 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
                         {
                             if (line.data.data[i] != templine.data.data[i]) //An error is detected.
                             {
-                                DebugMemWrite("cb%u: %#016llx, Comparison failed because of data!", (unsigned)m_mcid, (unsigned long long)address);
-                                return false; //Error
+                                throw exceptf<SimulationException>(*this, "cb%u: %#016llx, Comparison failed because of data!", (unsigned)m_mcid, (unsigned long long)address);
+								//return false; //Error
                                 //We need to flush L1 and CB...
                             }
                         }
@@ -218,7 +218,7 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
                     DebugMemWrite("Write to m_outgoing from cb%u: %#016llx, Comparison success!", (unsigned)m_mcid, (unsigned long long)address);
                 }
                 else //TLS, ignore them, push current line and templine to outgoing buffer
-                {
+                {//FIXME: It is a potential error!
                     Request temprequest;
                     temprequest.write     = true;
                     temprequest.address   = templine.address;
