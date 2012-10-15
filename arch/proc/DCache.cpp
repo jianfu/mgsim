@@ -732,7 +732,7 @@ Result Processor::DCache::DoOutgoingRequests()
     else
         mtid = request.wid;
 	//if it is out of FT scope, tag this write as non-dcache, write pass through cb
-    MCID mcid = m_mcid |  (mtid << 3) | (family.redundant << 2)  | (family.ftmode);  //override bit 2 and tid (bit 3 - log2(#tt))
+    MCID mcid = (m_mcid |  (mtid << 3) | (family.redundant << 2)) - (!family.ftmode);  //override bit 2 and tid (bit 3 - log2(#tt))
     //FT-END
 	
     if (request.write)
@@ -743,7 +743,7 @@ Result Processor::DCache::DoOutgoingRequests()
             return FAILED;
         }
         //FT-BEGIN
-        DebugMemWrite("Write to cb from dcache m_outgoing: %#016llx", (unsigned long long)request.address);
+        DebugMemWrite("Write to cb from dcache m_outgoing: %#016llx, ftmode = %u, mcid = %u", (unsigned long long)request.address, (unsigned)family.ftmode, (unsigned)mcid);
         //FT-END
     }
     else

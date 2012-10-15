@@ -443,7 +443,7 @@ Result CompBuffer::DoIncoming()
                     DeadlockWrite("Unable to process write completion for client %u, CB, only one client.", (unsigned)client1);
                     return FAILED;
                 }
-                DebugMemWrite("Completed TLS Write from cb%u to client[%u](tid%u)", (unsigned)m_mcid, (unsigned)client1, (unsigned)wid1);
+                DebugMemWrite("Completed Write from cb%u to client[%u](tid%u)", (unsigned)m_mcid, (unsigned)client1, (unsigned)wid1);
             }
             else
             {

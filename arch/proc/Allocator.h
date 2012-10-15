@@ -45,6 +45,7 @@ public:
         Bundle         binfo;          ///< The bundle information for bundled requests.
         //FT-BEGIN
         bool           redundant;
+		bool		   ftmode;
         //FT-END
     };
 

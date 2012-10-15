@@ -1106,7 +1106,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
 
                         //FT-BEGIN
                         Family& family = m_familyTable[m_input.fid];
-                        if ( place.size == 1 && family.redundant)//return the master's PID for reundant family when size is 1
+                        if ( place.size == 1 && family.redundant && family.ftmode)//return the master's PID for reundant family when size is 1
                             place.pid  = m_parent.GetProcessor().GetPID() + 1 - (m_parent.GetProcessor().GetPID()%2)*2;
                         else 
                         //FT-END

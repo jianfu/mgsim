@@ -41,6 +41,7 @@ struct RemoteMessage
             bool           exclusive;     ///< Allocate the exclusive context?
             //FT-BEGIN
             bool           redundant; 
+			bool		   ftmode;
             //FT-END
             Bundle         bundle;        ///< Bundle information (if bundled)
         } allocate;
