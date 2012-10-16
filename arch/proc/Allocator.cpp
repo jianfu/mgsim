@@ -724,7 +724,7 @@ FCapability Processor::Allocator::InitializeFamily(LFID fid) const
         family.redundant     = false;
         family.corr_fid      = INVALID_LFID;
         family.rthreadCount  = 0;
-		family.ftmode		 = 1;  //start ft mode from __mt_main, except the initial family.
+	family.ftmode		 = 1;  //start ft mode from __mt_main, except the initial family.
         //FT-END
 
         // Dependencies
@@ -1184,7 +1184,7 @@ bool Processor::Allocator::QueueFamilyAllocation(const RemoteMessage& msg, bool 
     request.bundle         = bundle;
     //FT-BEGIN
     request.redundant      = msg.allocate.redundant;
-	request.ftmode		   = msg.allocate.ftmode;
+    request.ftmode		   = msg.allocate.ftmode;
     //FT-END
 
     if (bundle)
@@ -1348,39 +1348,38 @@ Result Processor::Allocator::DoFamilyAllocate()
             Family& family = m_familyTable[lfid];
             family.redundant = req.redundant;
 			
-			//This setting is only for __mt_main
-			//__mt_main use NORMAL context
-			//The other system init use ECLUSIVE, such as __slFfmta_sep_alloc
-			if (!req.ftmode)  //The first InitialFamily
-			{
-				if (type == CONTEXT_NORMAL)
-				{
-					if (m_parent.GetPID() == 0) //master __mt_main
-					{
-						family.redundant = 0;
-						family.corr_fid	 = 0;
-					}
-					else if (m_parent.GetPID() == 1) //redundant __mt_main
-					{
-						family.redundant = 1;
-						family.corr_fid	 = 1;
-					}
-					else
-					{
-						throw exceptf<SimulationException>(*this, "__mt_main's initialization is failed!");
-					}
-				}
-				else if (type == CONTEXT_EXCLUSIVE)
-				{
-					family.ftmode = 0;
-					//printf ("Here\n");
-					//printf ("C%u, F%u, redundant = %u, ftmode = %u\n", (unsigned)m_parent.GetPID(), (unsigned)lfid, (unsigned)family.redundant, (unsigned)family.ftmode);
-				}
-				else
-				{
-					throw exceptf<SimulationException>(*this, "__slFfmta_sep_alloc's initialization is failed!");
-				}
-			}
+	    //This setting is only for __mt_main
+	    //__mt_main use NORMAL context
+	    //The other system init use ECLUSIVE, such as __slFfmta_sep_alloc
+	    if (!req.ftmode)  //The first InitialFamily
+	    {
+		if (type == CONTEXT_NORMAL)
+		{
+		    if (m_parent.GetPID() == 0) //master __mt_main
+		    {
+			family.redundant = 0;
+			family.corr_fid	 = 0;
+		    }
+		    else if (m_parent.GetPID() == 1) //redundant __mt_main
+		    {
+			family.redundant = 1;
+			family.corr_fid	 = 1;
+		    }
+		    else
+		    {
+			throw exceptf<SimulationException>(*this, "__mt_main's initialization is failed!");
+		    }
+		}
+		else if (type == CONTEXT_EXCLUSIVE)
+		{
+		    family.ftmode = 0;
+		}
+		else
+		{
+		    throw exceptf<SimulationException>(*this, "__slFfmta_sep_alloc's initialization is failed!");
+		}
+
+	    }
         }
     }
     //FT-END
