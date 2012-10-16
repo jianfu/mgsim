@@ -195,7 +195,7 @@ void Processor::FamilyTable::Cmd_Read(ostream& out, const vector<string>& argume
     }
     else
     {
-        out << "    |     Initial PC     | Allocated | Threads | P/A/D/Rd |  Cores  | Link | nLink |    Sync    |     Capability     | State         |   Symbol  | redundant | rthreadCount | corr_fid | broken" << endl; // [FT] 
+        out << "    |     Initial PC     | Allocated | Threads | P/A/D/Rd |  Cores  | Link | nLink |    Sync    |     Capability     | State         |   Symbol  | redundant | rthreadCount | corr_fid | ftmode" << endl; // [FT] 
         out << "----+--------------------+-----------+---------+----------+---------+------+-------+------------+--------------------+---------------+-----------+-----------+--------------+----------+--------" << endl;
 
         for (set<LFID>::const_iterator p = fids.begin(); p != fids.end(); ++p)
@@ -280,7 +280,7 @@ void Processor::FamilyTable::Cmd_Read(ostream& out, const vector<string>& argume
                 out << left << setw (6) << setfill(' ') << family.redundant 
                     << " | " << left << setw(12) << setfill(' ') << family.rthreadCount
                     << " | " << left << setw(10) << setfill(' ') << dec << (int)family.corr_fid
-                    << " | " << left << setw(8) << setfill(' ') << family.broken;
+                    << " | " << left << setw(8) << setfill(' ') << family.ftmode;
                 //FT-END
             }
             out << endl;

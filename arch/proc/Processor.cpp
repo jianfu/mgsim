@@ -509,7 +509,7 @@ bool Processor::CheckPermissions(MemAddr address, MemSize size, int access) cons
 //
 // Below are the various functions that construct configuration-dependent values
 //
-MemAddr Processor::GetTLSAddress(LFID /* fid */, TID tid) const
+MemAddr Processor::GetTLSAddress(LFID fid , TID tid) const
 {
     // 1 bit for TLS/GS
     // P bits for CPU
@@ -520,9 +520,28 @@ MemAddr Processor::GetTLSAddress(LFID /* fid */, TID tid) const
     unsigned int Ps  = Ls - m_bits.pid_bits;
     unsigned int Ts  = Ps - m_bits.tid_bits;
 
+	const Family& family = m_familyTable[fid];
+	const Thread& thread = m_threadTable[tid];
+	
+	PID temp_pid;
+	TID temp_tid;
+	
+	//redundant thread using master thread's TLS
+	if (family.ftmode && family.redundant) 
+	{
+		assert (thread.mtid != INVALID_TID);
+		temp_pid = m_pid + 1 - ((m_pid % 2) * 2);
+		temp_tid = thread.mtid;	
+	}
+	else
+	{
+		temp_pid = m_pid;
+		temp_tid = tid;
+	}
+	
     return (static_cast<MemAddr>(1)     << Ls) |
-           (static_cast<MemAddr>(m_pid) << Ps) |
-           (static_cast<MemAddr>(tid)   << Ts);
+           (static_cast<MemAddr>(temp_pid) << Ps) |
+           (static_cast<MemAddr>(temp_tid)   << Ts);
 }
 
 MemSize Processor::GetTLSSize() const

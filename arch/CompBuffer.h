@@ -67,11 +67,9 @@ namespace Simulator
 
         Buffer<Response>                m_incoming;        ///< Incoming buffer from memory bus.
         Buffer<Request>                 m_outgoing;        ///< Outgoing buffer to memory bus.
-        Buffer<Request>                 m_transfer;
-
+        
         Process                         p_Incoming;
         Process                         p_Outgoing;
-        Process                         p_Transfer;
 
         ComponentModelRegistry&         m_registry;
 
@@ -96,7 +94,6 @@ namespace Simulator
 
         Result DoOutgoing();
         Result DoIncoming();
-        Result DoTransfer();
 
         MCID RegisterClient  (IMemoryCallback& callback, Process& process, StorageTraceSet& traces, Storage& storage, bool grouped);
         void UnregisterClient(MCID /*id*/){}

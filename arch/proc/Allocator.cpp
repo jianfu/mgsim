@@ -370,9 +370,14 @@ bool Processor::Allocator::AllocateThread(LFID fid, TID tid, bool isNewlyAllocat
     COMMIT
     {
         // Reserve the memory (commits on use)
-        const MemAddr tls_base = m_parent.GetTLSAddress(fid, tid);
-        const MemSize tls_size = m_parent.GetTLSSize();
-        m_parent.MapMemory(tls_base+tls_size/2, tls_size/2);
+        //redundant thread will not reserve TLS
+		//mater thread and thread which is not in FT mode can reserve TLS 
+		if (family->redundant == 0) 
+		{
+			const MemAddr tls_base = m_parent.GetTLSAddress(fid, tid);
+			const MemSize tls_size = m_parent.GetTLSSize();
+			m_parent.MapMemory(tls_base+tls_size/2, tls_size/2);
+		}
     }
 
     SInteger logical_index = family->start;
@@ -724,7 +729,7 @@ FCapability Processor::Allocator::InitializeFamily(LFID fid) const
         family.redundant     = false;
         family.corr_fid      = INVALID_LFID;
         family.rthreadCount  = 0;
-	family.ftmode		 = 1;  //start ft mode from __mt_main, except the initial family.
+	family.ftmode	     = 1;  //start ft mode from __mt_main, except the initial family.
         //FT-END
 
         // Dependencies
@@ -878,46 +883,47 @@ Result Processor::Allocator::DoThreadAllocate()
         //FT-END
 
         // Clear the thread's dependents, if any
-        for (size_t i = 0; i < NUM_REG_TYPES; i++)
-        {
-            if (family.regs[i].count.shareds > 0)
-            {
-                if (!m_registerFile.Clear(MAKE_REGADDR((RegType)i, thread.regs[i].dependents), family.regs[i].count.shareds))
-                {
-                    DeadlockWrite("F%u/T%u(%llu) unable to clear the dependent registers",
-                                  (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
-                    return FAILED;
-                }
-            }
-        }
+	    for (size_t i = 0; i < NUM_REG_TYPES; i++)
+	    {
+		if (family.regs[i].count.shareds > 0)
+		{
+		    if (!m_registerFile.Clear(MAKE_REGADDR((RegType)i, thread.regs[i].dependents), family.regs[i].count.shareds))
+		    {
+			DeadlockWrite("F%u/T%u(%llu) unable to clear the dependent registers",
+				     (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
+			return FAILED;
+		    }
+		}	
+	    }
 
-        if (family.hasShareds && family.physBlockSize > 1)
-        {
-            // Mark 'previous thread cleaned up' on the next thread
-            if (thread.nextInBlock == INVALID_TID)
-            {
-                COMMIT{ family.prevCleanedUp = true; }
-                DebugSimWrite("F%u/T%u(%llu) marking PREV_CLEANED_UP on family (no next thread)",
-                              (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
-            }
-            else if (!DecreaseThreadDependency(thread.nextInBlock, THREADDEP_PREV_CLEANED_UP))
-            {
-                DeadlockWrite("F%u/T%u(%llu) marking PREV_CLEANED_UP on next T%u",
-                              (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index,
-                              (unsigned)thread.nextInBlock);
-                return FAILED;
-            }
-        }
+	    if (family.hasShareds && family.physBlockSize > 1)
+	    {
+		// Mark 'previous thread cleaned up' on the next thread
+		if (thread.nextInBlock == INVALID_TID)
+		{
+		    COMMIT{ family.prevCleanedUp = true; }
+		    DebugSimWrite("F%u/T%u(%llu) marking PREV_CLEANED_UP on family (no next thread)",
+				(unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
+		}
+		else if (!DecreaseThreadDependency(thread.nextInBlock, THREADDEP_PREV_CLEANED_UP))
+		{
+		    DeadlockWrite("F%u/T%u(%llu) marking PREV_CLEANED_UP on next T%u",
+			          (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index,
+			          (unsigned)thread.nextInBlock);
+		    return FAILED;
+		}
+	    }
 
-        COMMIT
-        {
-            // Unreserve the TLS memory
-            const MemAddr tls_base = m_parent.GetTLSAddress(fid, tid);
-            const MemSize tls_size = m_parent.GetTLSSize();
-            m_parent.UnmapMemory(tls_base+tls_size/2, tls_size/2);
-
-
-            }
+	    COMMIT
+	    {
+		// Unreserve the TLS memory
+		if (family.redundant == 0)
+		{
+		    const MemAddr tls_base = m_parent.GetTLSAddress(fid, tid);
+		    const MemSize tls_size = m_parent.GetTLSSize();
+		    m_parent.UnmapMemory(tls_base+tls_size/2, tls_size/2);
+		}
+	    }
 
         //FT-BEGIN
         }
@@ -2153,8 +2159,8 @@ Result Processor::Allocator::DoThreadActivation()
     //FT-BEGIN
     Thread& thread = m_threadTable[tid];
     Family& family = m_familyTable[thread.family];
-    
-    if (family.redundant && family.ftmode && thread.mtid == INVALID_TID && !family.broken)  //redundant family without mtid  //except "break"
+
+	if (family.redundant && family.ftmode && (thread.mtid == INVALID_TID) && !family.broken)  //redundant family without mtid  //except "break"
     {
         DebugSimWrite("F%u T%u: Redundant thread activation failed.\n", (unsigned)thread.family, (unsigned)tid);
         return SUCCESS;

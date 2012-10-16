@@ -32,10 +32,8 @@ CompBuffer::CompBuffer(const std::string& name,
     m_firstregistered_dcache(false),
     m_incoming       ("b_incoming",  *this, clock, config.getValueOrDefault<BufferSize>(*this, "IncomingBufferSize", INFINITE)),
     m_outgoing       ("b_outgoing",  *this, clock, config.getValueOrDefault<BufferSize>(*this, "OutgoingBufferSize", INFINITE)),
-    m_transfer       ("b_transfer",  *this, clock, config.getValueOrDefault<BufferSize>(*this, "TransferBufferSize", INFINITE)),
     p_Incoming       (*this, "incoming",     delegate::create<CompBuffer, &CompBuffer::DoIncoming>(*this) ),
     p_Outgoing       (*this, "outgoing",      delegate::create<CompBuffer, &CompBuffer::DoOutgoing>(*this) ),
-    p_Transfer       (*this, "transfer",      delegate::create<CompBuffer, &CompBuffer::DoTransfer>(*this) ),
     m_registry       (config),
     p_service        (*this, clock, "p_service")
 {
@@ -44,9 +42,6 @@ CompBuffer::CompBuffer(const std::string& name,
 
     m_incoming.Sensitive(p_Incoming);
     m_outgoing.Sensitive(p_Outgoing);
-    m_transfer.Sensitive(p_Transfer);
-
-    p_Transfer.SetStorageTraces(m_outgoing);
 }
 
 // Format of MCID for FT-supported clients: All DCache, ICache, and DCA will get a FT-MCID.
@@ -84,7 +79,7 @@ MCID CompBuffer::RegisterClient(IMemoryCallback& callback, Process& process, Sto
     p_service.AddCyclicProcess(process);
     //p_service.AddProcess(process);
 
-    traces = (opt(m_incoming) ^ (opt(m_transfer) * m_outgoing)) * traces;
+    traces = (opt(m_incoming) ^ m_outgoing) * traces;
 
     m_storages *= opt(storage);
     //p_Incoming will forward OnMemoryxxx from memroy to L1
@@ -217,21 +212,10 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
                     temp_wid        = templine.wid;
                     DebugMemWrite("Write to m_outgoing from cb%u: %#016llx, Comparison success!", (unsigned)m_mcid, (unsigned long long)address);
                 }
-                else //TLS, ignore them, push current line and templine to outgoing buffer
-                {//FIXME: It is a potential error!
-                    Request temprequest;
-                    temprequest.write     = true;
-                    temprequest.address   = templine.address;
-                    temprequest.data      = templine.data;
-                    temprequest.wid           = (templine.wid << 24) | (templine.client << 16) | (temp_wid << 8) | temp_client;
-                    if (!m_transfer.Push(temprequest))
-                    {
-                        DeadlockWrite("Unable to push request to transfer buffer, CB.");
-                        return false;
-                    }
-                    DebugMemWrite("TLS Write to m_outgoing from cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)address);
-                    DebugMemWrite("TLS Write to m_transfer from cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)templine.address);
-                }
+                else 
+                {
+                    throw exceptf<SimulationException>(*this, "cb%u: %#016llx, Comparison failed because of address!", (unsigned)m_mcid, (unsigned long long)address);
+				}
 
                 COMMIT{ m_compBuffer[mtid].pop_front(); }
             }
@@ -464,22 +448,6 @@ Result CompBuffer::DoIncoming()
     return SUCCESS;
 }
 
-Result CompBuffer::DoTransfer()
-{
-    assert(!m_transfer.Empty());
-    const Request& request = m_transfer.Front();
-
-    if (!m_outgoing.Push(request))
-    {
-        DeadlockWrite("Unable to push request to outgoing buffer from transfer buffer, CB.");
-        return FAILED;
-    }
-    DebugMemWrite("TLS Write to m_outgoing from m_transfer in cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)request.address);
-
-    m_transfer.Pop();
-    return SUCCESS;
-}
-
 
 void CompBuffer::Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const
 {
@@ -495,27 +463,6 @@ void CompBuffer::Cmd_Read(std::ostream& out, const std::vector<std::string>& arg
 			<< "      Address      | Type  | Value (writes)" << endl
 			<< "-------------------+-------+-------------------------" << endl;
 		for (Buffer<Request>::const_iterator p = m_outgoing.begin(); p != m_outgoing.end(); ++p)
-		{
-			out << hex << "0x" << setw(16) << setfill('0') << p->address << " | "
-				<< (p->write ? "Write" : "Read ") << " |";
-			if (p->write)
-			{
-				out << hex << setfill('0');
-				for (size_t x = 0; x < m_lineSize; ++x)
-				{
-					if (p->data.mask[x])
-						out << " " << setw(2) << (unsigned)(unsigned char)p->data.data[x];
-					else
-						out << " --";
-				}
-			}
-			out << dec << endl;
-		}
-		
-		out << endl << "Transfer requests:" << endl << endl
-			<< "      Address      | Type  | Value (writes)" << endl
-			<< "-------------------+-------+-------------------------" << endl;
-		for (Buffer<Request>::const_iterator p = m_transfer.begin(); p != m_transfer.end(); ++p)
 		{
 			out << hex << "0x" << setw(16) << setfill('0') << p->address << " | "
 				<< (p->write ? "Write" : "Read ") << " |";
