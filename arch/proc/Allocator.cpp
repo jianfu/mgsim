@@ -335,6 +335,7 @@ bool Processor::Allocator::AllocateThread(LFID fid, TID tid, bool isNewlyAllocat
     thread->dependencies.prevCleanedUp    = family->prevCleanedUp || !family->hasShareds || family->dependencies.numThreadsAllocated == 0 || family->physBlockSize == 1;
     thread->dependencies.killed           = false;
     thread->dependencies.numPendingWrites = 0;
+    thread->dependencies.rThreadDone	  = 0;
 
     family->prevCleanedUp = false;
 
@@ -607,6 +608,7 @@ bool Processor::Allocator::DecreaseThreadDependency(TID tid, ThreadDependency de
     Thread::Dependencies tmp_deps;
     Thread::Dependencies* deps = &tmp_deps;
     Thread& thread = m_threadTable[tid];
+    Family& family = m_familyTable[thread.family];
     if (IsCommitting()) {
         deps = &thread.dependencies;
     } else {
@@ -618,6 +620,7 @@ bool Processor::Allocator::DecreaseThreadDependency(TID tid, ThreadDependency de
     case THREADDEP_OUTSTANDING_WRITES: deps->numPendingWrites--;   break;
     case THREADDEP_PREV_CLEANED_UP:    deps->prevCleanedUp = true; break;
     case THREADDEP_TERMINATED:         deps->killed        = true; break;
+    case THREADDEP_R_THREAD_DONE:	   deps->rThreadDone   = true; break;
     }
 
     switch (dep)
@@ -636,26 +639,67 @@ bool Processor::Allocator::DecreaseThreadDependency(TID tid, ThreadDependency de
 
     case THREADDEP_PREV_CLEANED_UP:
     case THREADDEP_TERMINATED:
+    case THREADDEP_R_THREAD_DONE:
         if (deps->numPendingWrites == 0 && deps->prevCleanedUp && deps->killed)
         {
-            // This thread can be cleaned up, push it on the cleanup queue
-            if (!m_cleanup.Push(tid))
-            {
-                return false;
-            }
-            //FT-BEGIN
-            else
-            {
-                COMMIT{ 
-                    thread.cleanupFlag = 0; 
-                }
-            }
-            //FT-END
-            break;
+	    //FT mode, redundant thread is not terminated, so master thread can not 
+	    //be terminated.
+	    if (family.ftmode && !family.redundant && !deps->rThreadDone)
+		break;
+	    else
+	    {
+		//redundant thread should send a msg to master when it is terminated.
+		if (family.ftmode && family.redundant) 
+		{
+		    if (!m_rcleanup.Push(tid))
+		    {
+			DeadlockWrite("T%u unable to push tid into  m_rcleanup", (unsigned)tid);
+			return false;
+		    }
+		}
+				
+		// This thread can be cleaned up, push it on the cleanup queue
+		if (!m_cleanup.Push(tid))
+		{
+		    return false;
+		}
+		//FT-BEGIN
+		else
+		{	
+		    COMMIT{ 
+		    thread.cleanupFlag = 0; 
+		    }
+		}
+		//FT-END
+			
+		break;
+
+	    }
         }
     }
 
     return true;
+}
+
+Result Processor::Allocator::DoRThreadNotify()
+{
+    assert(!m_rcleanup.Empty());
+    const TID& tid = m_rcleanup.Front();
+    const Thread& thread = m_threadTable[tid];
+	
+    RemoteMessage msg;
+    msg.type                   = RemoteMessage::MSG_RTHREADDONE;
+    msg.rtd.pid                = m_parent.GetPID()+1-(m_parent.GetPID()%2)*2;
+    msg.rtd.tid                = thread.mtid;
+
+    if (!m_network.SendMessage(msg))
+    {
+	DeadlockWrite("Unable to send R_THREAD_DONE message!");
+	return FAILED;
+    }
+	
+    m_rcleanup.Pop();
+    return SUCCESS;
 }
 
 bool Processor::Allocator::IncreaseThreadDependency(TID tid, ThreadDependency dep)
@@ -666,7 +710,8 @@ bool Processor::Allocator::IncreaseThreadDependency(TID tid, ThreadDependency de
         switch (dep)
         {
         case THREADDEP_OUTSTANDING_WRITES: deps.numPendingWrites++; break;
-        case THREADDEP_PREV_CLEANED_UP:
+        case THREADDEP_R_THREAD_DONE:
+	case THREADDEP_PREV_CLEANED_UP:
         case THREADDEP_TERMINATED:         assert(0); break;
         }
     }
@@ -917,6 +962,7 @@ Result Processor::Allocator::DoThreadAllocate()
 	    COMMIT
 	    {
 		// Unreserve the TLS memory
+		// Non-FT mode or master thread in FT mode
 		if (family.redundant == 0)
 		{
 		    const MemAddr tls_base = m_parent.GetTLSAddress(fid, tid);
@@ -2343,6 +2389,7 @@ Processor::Allocator::Allocator(const string& name, Processor& parent, Clock& cl
     m_alloc         ("b_alloc",          *this, clock, config.getValueOrDefault<BufferSize>(*this, "InitialThreadAllocateQueueSize", familyTable.GetNumFamilies()), 2 /*[FT]*/),
     m_creates       ("b_creates",        *this, clock, config.getValueOrDefault<BufferSize>(*this, "CreateQueueSize", familyTable.GetNumFamilies()), 3),
     m_cleanup       ("b_cleanup",        *this, clock, config.getValueOrDefault<BufferSize>(*this, "ThreadCleanupQueueSize", threadTable.GetNumThreads()), 4),
+    m_rcleanup      ("b_rcleanup",       *this, clock, config.getValueOrDefault<BufferSize>(*this, "RThreadCleanupQueueSize", threadTable.GetNumThreads()), 4),
     m_createState   (CREATE_INITIAL),
     m_createLine    (0),
     m_readyThreads1 ("q_readyThreads1", *this, clock, threadTable),
@@ -2364,7 +2411,8 @@ Processor::Allocator::Allocator(const string& name, Processor& parent, Clock& cl
     p_FamilyCreate    (*this, "family-create",     delegate::create<Allocator, &Processor::Allocator::DoFamilyCreate    >(*this) ),
     p_ThreadActivation(*this, "thread-activation", delegate::create<Allocator, &Processor::Allocator::DoThreadActivation>(*this) ),
     p_Bundle          (*this, "bundle-Create",     delegate::create<Allocator, &Processor::Allocator::DoBundle          >(*this) ),
-
+    p_RThreadNotify   (*this, "rthread-notify",    delegate::create<Allocator, &Processor::Allocator::DoRThreadNotify   >(*this) ),
+    
     p_allocation    (*this, clock, "p_allocation"),
     p_alloc         (*this, clock, "p_alloc"),
     p_readyThreads  (*this, clock, "p_readyThreads"),
@@ -2382,6 +2430,7 @@ Processor::Allocator::Allocator(const string& name, Processor& parent, Clock& cl
     m_allocRequestsNoSuspend.Sensitive(p_FamilyAllocate);
     m_allocRequestsExclusive.Sensitive(p_FamilyAllocate);
     m_bundle                .Sensitive(p_Bundle);
+    m_rcleanup              .Sensitive(p_RThreadNotify);
 
     std::fill(m_numThreadsPerState, m_numThreadsPerState+TST_NUMSTATES, 0);
 

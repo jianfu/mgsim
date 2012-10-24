@@ -66,7 +66,7 @@ bool COMA::Cache::Read(MCID id, MemAddr address)
 
     //FT-BEGIN
     // Here shift number depends on NumThreadEntires.
-    assert(m_clients[id >> 10] != NULL);
+    assert(m_clients[id >> 11] != NULL);
     //FT-END
 
     if (!m_requests.Push(req))

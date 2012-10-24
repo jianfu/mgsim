@@ -24,6 +24,7 @@ enum ThreadDependency
     THREADDEP_OUTSTANDING_WRITES,   // Number of outstanding memory writes
     THREADDEP_PREV_CLEANED_UP,      // Predecessor has been cleaned up
     THREADDEP_TERMINATED,           // Thread has terminated
+    THREADDEP_R_THREAD_DONE,
 };
 
 class Allocator : public Object, public Inspect::Interface<Inspect::Read>
@@ -45,7 +46,7 @@ public:
         Bundle         binfo;          ///< The bundle information for bundled requests.
         //FT-BEGIN
         bool           redundant;
-		bool		   ftmode;
+	bool	       ftmode;
         //FT-END
     };
 
@@ -185,6 +186,7 @@ private:
     Buffer<LFID>          m_alloc;                   ///< This is the queue of families waiting for initial thread allocation
     Buffer<CreateInfo>    m_creates;                 ///< Create queue
     Buffer<TID>           m_cleanup;                 ///< Cleanup queue
+    Buffer<TID>           m_rcleanup;                ///< Redundant thread cleanup queue, all the rthread should send a msg to master
     CreateState           m_createState;	         ///< State of the current state;
     CID                   m_createLine;	   	         ///< Cache line that holds the register info
     ThreadList            m_readyThreads1;           ///< Queue of the threads can be activated; from the pipeline
@@ -204,6 +206,7 @@ private:
     Result DoFamilyCreate();
     Result DoThreadActivation();
     Result DoBundle();
+    Result DoRThreadNotify();
 
     // Statistics
     CycleNo    m_lastcycle;
@@ -221,6 +224,7 @@ public:
     Process p_FamilyCreate;
     Process p_ThreadActivation;
     Process p_Bundle;
+    Process p_RThreadNotify;
 
     ArbitratedService<>   p_allocation;     ///< Arbitrator for FamilyTable::AllocateFamily
     ArbitratedService<>   p_alloc;          ///< Arbitrator for m_alloc

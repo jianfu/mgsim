@@ -226,7 +226,8 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
     m_network.m_delegateOut.AddProcess(m_network.p_DelegationIn);     // Returning registers
     m_network.m_delegateOut.AddProcess(m_network.p_Link);             // Place sync causes final sync
     //FT-BEGIN
-    m_network.m_delegateOut.AddProcess(m_network.p_rLink);            
+    m_network.m_delegateOut.AddProcess(m_network.p_rLink); 
+    m_network.m_delegateOut.AddProcess(m_allocator.p_RThreadNotify);
     //FT-END
 
     m_network.m_delegateOut.AddProcess(m_dcache.p_CompletedReads);    // Read completion causes sync
@@ -297,13 +298,15 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
 
     m_allocator.p_Bundle.SetStorageTraces( m_dcache.m_outgoing ^ DELEGATE );
 
+    m_allocator.p_RThreadNotify.SetStorageTraces( m_network.m_delegateOut );
+	
     m_icache.p_Incoming.SetStorageTraces(
         opt(m_allocator.m_activeThreads) );
 
     // m_icache.p_Outgoing is set in the memory
 
     m_dcache.p_Incoming.SetStorageTraces(
-        /* Writes */    opt(m_allocator.m_readyThreads2) ^ opt(m_allocator.m_cleanup) ^
+        /* Writes */    opt(m_allocator.m_readyThreads2) ^ opt(m_allocator.m_cleanup) ^ opt(m_allocator.m_rcleanup * m_allocator.m_cleanup) ^
         /* Reads */     m_dcache.m_completed );
 
     m_dcache.p_CompletedReads.SetStorageTraces(
@@ -317,6 +320,7 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
         opt(m_allocator.m_bundle ^ /* FIXME: is the bundle creation buffer really involved here? */
             (m_allocator.m_readyThreads1 * m_allocator.m_cleanup) ^
             m_allocator.m_cleanup ^
+	    (m_allocator.m_rcleanup * m_allocator.m_cleanup) ^ /*[FT]*/
             m_allocator.m_readyThreads1);
     StorageTraceSet pls_memory =
         m_dcache.m_outgoing;
@@ -360,7 +364,8 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
         /* MSG_RAW_REGISTER */      m_allocator.m_readyThreads2 ^
         /* RRT_LAST_SHARED */       (DELEGATE) ^
         /* RRT_FIRST_DEPENDENT */   (m_allocator.m_readyThreads2) ^
-        /* RRT_GLOBAL */            (m_allocator.m_readyThreads2 * opt(m_network.m_link.out ^ m_network.m_rlink.out /*[FT]*/))
+        /* RRT_GLOBAL */            (m_allocator.m_readyThreads2 * opt(m_network.m_link.out ^ m_network.m_rlink.out /*[FT]*/)) ^
+	/* MSG_RTHREADDONE */       (opt(m_allocator.m_rcleanup) * m_allocator.m_cleanup) /*[FT]*/
         );
 
     m_network.p_Link.SetStorageTraces(

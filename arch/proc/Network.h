@@ -24,6 +24,7 @@ struct RemoteMessage
         MSG_RTHREADCOUNT,   ///< The distance of thread creation between master family and redundant family 
         MSG_MASTERTID,      ///< The physic matching master tid for redundant thread
         MSG_PAIR,           ///< Paring the master and redundant family
+	MSG_RTHREADDONE,
         //FT-END
     };
 
@@ -41,7 +42,7 @@ struct RemoteMessage
             bool           exclusive;     ///< Allocate the exclusive context?
             //FT-BEGIN
             bool           redundant; 
-			bool		   ftmode;
+	    bool	   ftmode;
             //FT-END
             Bundle         bundle;        ///< Bundle information (if bundled)
         } allocate;
@@ -126,6 +127,12 @@ struct RemoteMessage
             RegIndex     completion_reg;
             PID          completion_pid;
         } pair;
+		
+	struct
+        {
+            PID           pid;
+            TID           tid;
+        } rtd;
         //FT-END
     };
 

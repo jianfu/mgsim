@@ -47,6 +47,11 @@ struct Thread
          confirmed by the memory system.
         */
         unsigned int numPendingWrites;
+		
+	//FT-BEGIN
+	//For the TLS's reservation and reservation, mster thread should be terminated after redundant thread. 
+	bool rThreadDone;
+	//FT-END
     };
 
     MemAddr      pc;

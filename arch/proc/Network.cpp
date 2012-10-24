@@ -143,6 +143,7 @@ bool Processor::Network::SendMessage(const RemoteMessage& msg)
     case RemoteMessage::MSG_RTHREADCOUNT:  dmsg.dest = msg.rtc.pid; break;
     case RemoteMessage::MSG_MASTERTID:     dmsg.dest = msg.mtid.pid; break;
     case RemoteMessage::MSG_PAIR:          dmsg.dest = msg.pair.mfid.pid; break;
+    case RemoteMessage::MSG_RTHREADDONE:   dmsg.dest = msg.rtd.pid; break;
     //FT-END
 
     default:                              dmsg.dest = INVALID_PID; break;
@@ -948,7 +949,7 @@ Result Processor::Network::DoDelegationIn()
             }
         }
     }
-    break;
+	break;
 
     //FT-BEGIN
     case RemoteMessage::MSG_ADDR_REGISTER:
@@ -957,7 +958,7 @@ Result Processor::Network::DoDelegationIn()
             DeadlockWrite("Unable to set the reg index.");
             return FAILED;
         }
-        break;
+	break;
 
     case RemoteMessage::MSG_RTHREADCOUNT:
     {
@@ -965,12 +966,12 @@ Result Processor::Network::DoDelegationIn()
         COMMIT{ family.rthreadCount++; }
         //printf("C%u, rtc: %u\n", (unsigned)m_parent.GetPID(), (unsigned)family.rthreadCount);
     }
-    break;
+	break;
 
     case RemoteMessage::MSG_MASTERTID:
         if(!m_allocator.FindReadyThread(msg.mtid.lfid, msg.mtid.tid, msg.mtid.index))
             return FAILED;
-        break;
+	break;
 
     case RemoteMessage::MSG_PAIR:
     {
@@ -1014,7 +1015,12 @@ Result Processor::Network::DoDelegationIn()
         }
 
     }
-    break;
+	break;
+	
+    case RemoteMessage::MSG_RTHREADDONE:
+	if(!m_allocator.DecreaseThreadDependency(msg.rtd.tid, THREADDEP_R_THREAD_DONE))
+	    return FAILED;
+	break;
     //FT-END
 		
     default:
