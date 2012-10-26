@@ -63,10 +63,11 @@ bool COMA::Cache::Read(MCID id, MemAddr address)
     //FT-END
 
     // Client should have been registered
-
+	// We cannnot test it, because we use id instead of 
+	// m_clientMap[id>>11].second, which is id_in_cache.
     //FT-BEGIN
     // Here shift number depends on NumThreadEntires.
-    assert(m_clients[id >> 11] != NULL);
+    //assert(m_clients[id >> 11] != NULL);
     //FT-END
 
     if (!m_requests.Push(req))
