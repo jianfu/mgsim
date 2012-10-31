@@ -125,8 +125,15 @@ bool COMA::Write(MCID id, MemAddr address, const MemData& data, WClientID wid)
         m_nwrites++;
         m_nwrite_bytes += m_lineSize;
     }
+	
+	//FT-BEGIN
+	// make wirte msg hold its cb index,
+	// because write miss will produce a request msg as read completed.
+	//MCID mcid = m_clientMap[id >> 11].second << 24 | id;
+	//FT-END
+	
     // Forward the write to the cache associated with the callback
-    return m_clientMap[id].first->Write(m_clientMap[id].second, address, data, wid);
+    return m_clientMap[id].first->Write(m_clientMap[id].second/*mcid*/, address, data, wid);
 }
 
 COMA::COMA(const std::string& name, Simulator::Object& parent, Clock& clock, Config& config) :

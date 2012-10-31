@@ -15,9 +15,9 @@ namespace Simulator
 Processor::DCache::DCache(const std::string& name, Processor& parent, Clock& clock, Allocator& alloc, FamilyTable& familyTable, ThreadTable& threadTable /*[FT]*/, RegisterFile& regFile, IMemory& memory, Config& config)
 :   Object(name, parent, clock), m_parent(parent),
     m_allocator(alloc), m_familyTable(familyTable), 
-//FT-BEGIN
+    //FT-BEGIN
     m_threadTable(threadTable), 
-//FT-END
+    //FT-END
     m_regFile(regFile),
     m_memory(memory),
     m_mcid(0),
@@ -227,6 +227,7 @@ Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAdd
     // Update last line access
     COMMIT{ line->access = GetCycleNo(); }
 
+    //COMMIT{printf("Read from m_mcid(%u): %#016llx\n", (unsigned)m_mcid, (unsigned long long)address);}	
     if (result == DELAYED)
     {
         // A new line has been allocated; send the request to memory
@@ -425,6 +426,12 @@ bool Processor::DCache::OnMemoryReadCompleted(MemAddr addr, const char* data, MC
     {
         assert(line->state == LINE_LOADING || line->state == LINE_INVALID);
 
+	for (Buffer<Request>::const_iterator p = m_outgoing.begin(); p != m_outgoing.end(); ++p)
+	{
+	    if ((!p->write) && p->address == addr)  //read still in outgoing buffer, ignore it
+		return true;
+	}
+		
         // Registers are waiting on this data
         COMMIT
         {
@@ -433,7 +440,7 @@ bool Processor::DCache::OnMemoryReadCompleted(MemAddr addr, const char* data, MC
                       will not know about those yet and we don't want inconsistent
                       content in L1.
                       This is kind of a hack; it's feasibility in hardware in a single cycle
-                      is questionable.
+		      is questionable.
             */
             char mdata[m_lineSize];
 
@@ -441,7 +448,7 @@ bool Processor::DCache::OnMemoryReadCompleted(MemAddr addr, const char* data, MC
 
             for (Buffer<Request>::const_iterator p = m_outgoing.begin(); p != m_outgoing.end(); ++p)
             {
-                if (p->write && p->address == addr)
+		if (p->write && p->address == addr)
                 {
                     // This is a write to the same line, merge it
                     line::blit(&mdata[0], p->data.data, p->data.mask, m_lineSize);
@@ -731,8 +738,12 @@ Result Processor::DCache::DoOutgoingRequests()
         mtid = thread.mtid;
     else
         mtid = request.wid;
-	//if it is out of FT scope, tag this write as non-dcache, write pass through cb
-    MCID mcid = (m_mcid |  (mtid << 3) | (family.redundant << 2)) - (!family.ftmode);  //override bit 2 and tid (bit 3 - log2(#tt))
+
+    MCID mcid = m_mcid |  (mtid << 3) | (family.redundant << 2);  //override bit 2 and tid (bit 3 - log2(#tt))
+
+    //if it is out of FT scope, tag this write as non-dcache, write pass through cb
+    if(!family.ftmode && (mcid & 1))
+	mcid = mcid - 1;
     //FT-END
 	
     if (request.write)
@@ -748,6 +759,7 @@ Result Processor::DCache::DoOutgoingRequests()
     }
     else
     {
+	//COMMIT{printf("Read from m_mcid(%u): %#016llx, request.mcid=%u\n", (unsigned)m_mcid, (unsigned long long)request.address, (unsigned)mcid);}
         if (!m_memory.Read(mcid, request.address))
         {
             DeadlockWrite("Unable to send read to 0x%016llx to memory", (unsigned long long)request.address);

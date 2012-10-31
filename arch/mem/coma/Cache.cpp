@@ -45,7 +45,9 @@ void COMA::Cache::UnregisterClient(MCID id)
 bool COMA::Cache::Read(MCID id, MemAddr address)
 {
     assert(address % m_lineSize == 0);
-
+    DebugMemWrite("Read to Cache(%u) from cb(%u): %#016llx", (unsigned)m_id, (unsigned)(id>>11), (unsigned long long)address);
+    //COMMIT{printf("Read to Cache(%u) from cb(%u): %#016llx\n", (unsigned)m_id, (unsigned)(id>>11), (unsigned long long)address);}
+    
     // We need to arbitrate between the different processes on the cache,
     // and then between the different clients. There are 2 arbitrators for this.
     if (!p_bus.Invoke())
@@ -63,8 +65,8 @@ bool COMA::Cache::Read(MCID id, MemAddr address)
     //FT-END
 
     // Client should have been registered
-	// We cannnot test it, because we use id instead of 
-	// m_clientMap[id>>11].second, which is id_in_cache.
+    // We cannnot test it, because we use id instead of 
+    // m_clientMap[id>>11].second, which is id_in_cache.
     //FT-BEGIN
     // Here shift number depends on NumThreadEntires.
     //assert(m_clients[id >> 11] != NULL);
@@ -86,6 +88,7 @@ bool COMA::Cache::Write(MCID id, MemAddr address, const MemData& data, WClientID
 {
     assert(address % m_lineSize == 0);
 
+    DebugMemWrite("Write to Cache(%u) from cb(%u): %#016llx", (unsigned)m_id, (unsigned)((id & (( 1 << 24 ) - 1))>>11), (unsigned long long)address);
     // We need to arbitrate between the different processes on the cache,
     // and then between the different clients. There are 2 arbitrators for this.
     if (!p_bus.Invoke())
@@ -98,8 +101,17 @@ bool COMA::Cache::Write(MCID id, MemAddr address, const MemData& data, WClientID
     Request req;
     req.address = address;
     req.write   = true;
+    //req.client  = id >> 24;
     req.client  = id;
     req.wid     = wid;
+    //FT-BEGIN
+    // for the write miss, the request msg will be sent to coma ring
+    //req.mcid = id & (( 1 << 24 ) - 1);
+    //req.mcid = MCID(-1);
+    //FT-END
+    //COMMIT{printf("Write to Cache(%u) from cb(%u), client(%u): %#016llx\n", (unsigned)m_id, (unsigned)(req.mcid>>11), (unsigned)req.client, (unsigned long long)address);}
+    
+	
     COMMIT{
     std::copy(data.data, data.data + m_lineSize, req.mdata.data);
     std::copy(data.mask, data.mask + m_lineSize, req.mdata.mask);
@@ -280,12 +292,17 @@ bool COMA::Cache::OnMessageReceived(Message* msg)
         return false;
     }
 
+    //DebugMemWrite("Cache(%u) transfer msg from Cache(%u), real_mcid(%u): %#016llx", (unsigned)m_id, (unsigned)(msg->sender), (unsigned)(msg->mcid>>11), (unsigned long long)(msg->address));
+	
+	
     if (msg->ignore || (msg->type == Message::REQUEST_DATA_TOKEN && msg->sender != m_id))
     {
         // This is either
         // * a message that should ignored, or
         // * a read response that has not reached its origin yet
         // Just forward it
+	//DebugMemWrite("ignore Cache(%u) transfer msg from Cache(%u), real_mcid(%u): %#016llx", (unsigned)m_id, (unsigned)(msg->sender), (unsigned)(msg->mcid>>11), (unsigned long long)(msg->address));
+		
         if (!SendMessage(msg, MINSPACE_FORWARD))
         {
             DeadlockWrite("Unable to buffer forwarded request for next node");
@@ -302,7 +319,8 @@ bool COMA::Cache::OnMessageReceived(Message* msg)
     case Message::REQUEST:
     case Message::REQUEST_DATA:
         // Some cache had a read miss. See if we have the line.
-
+	//DebugMemWrite("R_D:Cache(%u) transfer msg from Cache(%u), real_mcid(%u): %#016llx", (unsigned)m_id, (unsigned)(msg->sender), (unsigned)(msg->mcid>>11), (unsigned long long)(msg->address));
+		
         if (line != NULL && line->state == LINE_FULL)
         {
             // We have a copy of the line
@@ -310,7 +328,9 @@ bool COMA::Cache::OnMessageReceived(Message* msg)
             {
                 // We can give the request data and tokens
                 TraceWrite(msg->address, "Received Read Request; Attaching data and tokens");
-
+				
+		//DebugMemWrite("R_D:Cache(%u) transfer msg from Cache(%u), real_mcid(%u): %#016llx, ->R_D_T", (unsigned)m_id, (unsigned)(msg->sender), (unsigned)(msg->mcid>>11), (unsigned long long)(msg->address));
+				
                 COMMIT
                 {
                     msg->type   = Message::REQUEST_DATA_TOKEN;
@@ -359,7 +379,8 @@ bool COMA::Cache::OnMessageReceived(Message* msg)
         assert(line->state == LINE_LOADING);
         assert(msg->tokens > 0);
         assert(line->tokens == 0);
-
+	//DebugMemWrite("R_D_T:Cache(%u) transfer msg from Cache(%u), real_mcid(%u): %#016llx", (unsigned)m_id, (unsigned)(msg->sender), (unsigned)(msg->mcid>>11), (unsigned long long)(msg->address));
+		
         TraceWrite(msg->address, "Received Read Response with %u tokens", msg->tokens);
 
         COMMIT
@@ -419,6 +440,8 @@ bool COMA::Cache::OnMessageReceived(Message* msg)
     }
 
     case Message::EVICTION:
+	//DebugMemWrite("E:Cache(%u) transfer msg from Cache(%u), real_mcid(%u): %#016llx", (unsigned)m_id, (unsigned)(msg->sender), (unsigned)(msg->mcid>>11), (unsigned long long)(msg->address));
+		
         if (line != NULL)
         {
             if (line->state == LINE_FULL)
@@ -484,6 +507,8 @@ bool COMA::Cache::OnMessageReceived(Message* msg)
         break;
 
     case Message::UPDATE:
+	//DebugMemWrite("U:Cache(%u) transfer msg from Cache(%u), real_mcid(%u): %#016llx", (unsigned)m_id, (unsigned)(msg->sender), (unsigned)(msg->mcid>>11), (unsigned long long)(msg->address));
+		
         if (msg->sender == m_id)
         {
             // The update has come full circle.
@@ -642,6 +667,9 @@ Result COMA::Cache::OnWriteRequest(const Request& req)
             msg->ignore    = false;
             msg->tokens    = 0;
             msg->sender    = m_id;
+	    //FT-BEGIN
+            //msg->mcid      = req.mcid;
+            //FT-END
 
         }
 
@@ -691,6 +719,10 @@ Result COMA::Cache::OnWriteRequest(const Request& req)
             msg->ignore    = false;
             msg->client    = req.client;
             msg->wid       = req.wid;
+	    //FT-BEGIN
+	    // it will not be used in update.
+            //msg->mcid      = req.mcid;
+            //FT-END
             std::copy(req.mdata.data, req.mdata.data + m_lineSize, msg->data.data);
             std::copy(req.mdata.mask, req.mdata.mask + m_lineSize, msg->data.mask);
 
@@ -802,6 +834,7 @@ Result COMA::Cache::OnReadRequest(const Request& req)
             //FT-END
         }
 
+	//DebugMemWrite("Cache(%u) read miss from real_mcid(%u)(%u): %#016llx", (unsigned)m_id, (unsigned)(req.mcid>>11), (unsigned)(msg->mcid>>11), (unsigned long long)req.address);	
         if (!SendMessage(msg, MINSPACE_INSERTION))
         {
             ++m_numStallingRLoads;
@@ -832,6 +865,8 @@ Result COMA::Cache::OnReadRequest(const Request& req)
             ++m_numRFullHits;
         }
 
+	//DebugMemWrite("Cache read hit from real_mcid(%u): %#016llx", (unsigned)(req.mcid>>11), (unsigned long long)req.address);
+	
         //FT-BEGIN
         if (!OnReadCompleted(req.address, data, req.mcid))
         //FT-END
