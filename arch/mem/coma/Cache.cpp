@@ -45,8 +45,6 @@ void COMA::Cache::UnregisterClient(MCID id)
 bool COMA::Cache::Read(MCID id, MemAddr address)
 {
     assert(address % m_lineSize == 0);
-    DebugMemWrite("Read to Cache(%u) from cb(%u): %#016llx", (unsigned)m_id, (unsigned)(id>>11), (unsigned long long)address);
-    //COMMIT{printf("Read to Cache(%u) from cb(%u): %#016llx\n", (unsigned)m_id, (unsigned)(id>>11), (unsigned long long)address);}
     
     // We need to arbitrate between the different processes on the cache,
     // and then between the different clients. There are 2 arbitrators for this.
@@ -60,17 +58,9 @@ bool COMA::Cache::Read(MCID id, MemAddr address)
     Request req;
     req.address = address;
     req.write   = false;
-    //FT-BEGIN
-    req.mcid    = id;
-    //FT-END
 
     // Client should have been registered
-    // We cannnot test it, because we use id instead of 
-    // m_clientMap[id>>11].second, which is id_in_cache.
-    //FT-BEGIN
-    // Here shift number depends on NumThreadEntires.
-    //assert(m_clients[id >> 11] != NULL);
-    //FT-END
+    assert(m_clients[id] != NULL);
 
     if (!m_requests.Push(req))
     {
@@ -101,16 +91,8 @@ bool COMA::Cache::Write(MCID id, MemAddr address, const MemData& data, WClientID
     Request req;
     req.address = address;
     req.write   = true;
-    //req.client  = id >> 24;
     req.client  = id;
     req.wid     = wid;
-    //FT-BEGIN
-    // for the write miss, the request msg will be sent to coma ring
-    //req.mcid = id & (( 1 << 24 ) - 1);
-    //req.mcid = MCID(-1);
-    //FT-END
-    //COMMIT{printf("Write to Cache(%u) from cb(%u), client(%u): %#016llx\n", (unsigned)m_id, (unsigned)(req.mcid>>11), (unsigned)req.client, (unsigned long long)address);}
-    
 	
     COMMIT{
     std::copy(data.data, data.data + m_lineSize, req.mdata.data);
@@ -423,9 +405,7 @@ bool COMA::Cache::OnMessageReceived(Message* msg)
             }
         }
 
-        //FT-BEGIN
-        if (!OnReadCompleted(msg->address, data, msg->mcid))
-        //FT-END
+        if (!OnReadCompleted(msg->address, data))
         {
             DeadlockWrite("Unable to notify clients of read completion");
             ++m_numStallingRCompletions;
@@ -578,7 +558,7 @@ bool COMA::Cache::OnMessageReceived(Message* msg)
     return true;
 }
 
-bool COMA::Cache::OnReadCompleted(MemAddr addr, const char * data, MCID mcid) //FT
+bool COMA::Cache::OnReadCompleted(MemAddr addr, const char * data) 
 {
     // Send the completion on the bus
     if (!p_bus.Invoke())
@@ -589,9 +569,7 @@ bool COMA::Cache::OnReadCompleted(MemAddr addr, const char * data, MCID mcid) //
 
     for (std::vector<IMemoryCallback*>::const_iterator p = m_clients.begin(); p != m_clients.end(); ++p)
     {
-        //FT-BEGIN
-        if (*p != NULL && !(*p)->OnMemoryReadCompleted(addr, data, mcid))
-        //FT-END
+        if (*p != NULL && !(*p)->OnMemoryReadCompleted(addr, data))
         {
             DeadlockWrite("Unable to send read completion to clients");
             return false;
@@ -667,9 +645,6 @@ Result COMA::Cache::OnWriteRequest(const Request& req)
             msg->ignore    = false;
             msg->tokens    = 0;
             msg->sender    = m_id;
-	    //FT-BEGIN
-            //msg->mcid      = req.mcid;
-            //FT-END
 
         }
 
@@ -719,10 +694,7 @@ Result COMA::Cache::OnWriteRequest(const Request& req)
             msg->ignore    = false;
             msg->client    = req.client;
             msg->wid       = req.wid;
-	    //FT-BEGIN
-	    // it will not be used in update.
-            //msg->mcid      = req.mcid;
-            //FT-END
+	 
             std::copy(req.mdata.data, req.mdata.data + m_lineSize, msg->data.data);
             std::copy(req.mdata.mask, req.mdata.mask + m_lineSize, msg->data.mask);
 
@@ -829,13 +801,9 @@ Result COMA::Cache::OnReadRequest(const Request& req)
             msg->ignore    = false;
             msg->tokens    = 0;
             msg->sender    = m_id;
-            //FT-BEGIN
-            msg->mcid      = req.mcid;
-            //FT-END
         }
 
-	//DebugMemWrite("Cache(%u) read miss from real_mcid(%u)(%u): %#016llx", (unsigned)m_id, (unsigned)(req.mcid>>11), (unsigned)(msg->mcid>>11), (unsigned long long)req.address);	
-        if (!SendMessage(msg, MINSPACE_INSERTION))
+	    if (!SendMessage(msg, MINSPACE_INSERTION))
         {
             ++m_numStallingRLoads;
             DeadlockWrite("Unable to buffer read request for next node");
@@ -865,11 +833,8 @@ Result COMA::Cache::OnReadRequest(const Request& req)
             ++m_numRFullHits;
         }
 
-	//DebugMemWrite("Cache read hit from real_mcid(%u): %#016llx", (unsigned)(req.mcid>>11), (unsigned long long)req.address);
-	
-        //FT-BEGIN
-        if (!OnReadCompleted(req.address, data, req.mcid))
-        //FT-END
+
+        if (!OnReadCompleted(req.address, data))
         {
             ++m_numStallingRHits;
             DeadlockWrite("Unable to notify clients of read completion");

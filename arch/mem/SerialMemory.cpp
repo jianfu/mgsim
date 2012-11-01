@@ -125,9 +125,7 @@ Result SerialMemory::DoRequests()
 
                 VirtualMemory::Read(request.address, data, m_lineSize);
 
-//FT-BEGIN
-                if (!request.callback->OnMemoryReadCompleted(request.address, data, 0))
-//FT-END
+                if (!request.callback->OnMemoryReadCompleted(request.address, data))
                 {
                     return FAILED;
                 }

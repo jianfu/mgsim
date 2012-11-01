@@ -416,7 +416,7 @@ Result Processor::DCache::Write(MemAddr address, void* data, MemSize size, LFID 
     return DELAYED;
 }
 
-bool Processor::DCache::OnMemoryReadCompleted(MemAddr addr, const char* data, MCID /*[FT]*/)
+bool Processor::DCache::OnMemoryReadCompleted(MemAddr addr, const char* data)
 {
     // Check if we have the line and if its loading.
     // This method gets called whenever a memory read completion is put on the

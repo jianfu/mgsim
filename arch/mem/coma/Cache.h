@@ -43,9 +43,6 @@ private:
         MemAddr      address;
         unsigned int client;
         WClientID    wid;
-        //FT-BEGIN
-        MCID         mcid;
-        //FT-END
     };
 
     IBankSelector&                m_selector;
@@ -124,7 +121,7 @@ private:
     Result OnReadRequest(const Request& req);
     Result OnWriteRequest(const Request& req);
     bool OnMessageReceived(Message* msg);
-    bool OnReadCompleted(MemAddr addr, const char * data, MCID mcid);
+    bool OnReadCompleted(MemAddr addr, const char * data);
 public:
     Cache(const std::string& name, COMA& parent, Clock& clock, CacheID id, Config& config);
 

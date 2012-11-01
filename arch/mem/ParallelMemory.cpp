@@ -64,9 +64,7 @@ class ParallelMemory::Port : public Object
 
                 static_cast<VirtualMemory&>(m_memory).Read(request.address, data, m_lineSize);
 
-//FT-BEGIN
-                if (!m_callback.OnMemoryReadCompleted(request.address, data, 0))
-//FT-END
+                if (!m_callback.OnMemoryReadCompleted(request.address, data))
                 {
                     return FAILED;
                 }

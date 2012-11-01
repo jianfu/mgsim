@@ -286,29 +286,14 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
 }
 
 
-bool CompBuffer::OnMemoryReadCompleted(MemAddr addr, const char* data, MCID mcid)
+bool CompBuffer::OnMemoryReadCompleted(MemAddr addr, const char* data)
 {
-    TID mtid = (mcid >> 3) & ((1 << m_bufferindexbits) - 1);
-    bool coming_from_right = (mcid >> 1) & 1;
-    bool redundant = (mcid >> 2) & 1;
-    MCID real_mcid = mcid >> (m_bufferindexbits + 3);
-
     char mdata[m_lineSize];
     std::copy(data, data + m_lineSize, &mdata[0]);
 
-    //DebugMemWrite("Completed Read to cb%u from real_mcid(%u): %#016llx, mcid(%u)", (unsigned)m_mcid, (unsigned)real_mcid, (unsigned long long)addr, (unsigned)mcid);
-	//COMMIT{printf("Completed Read to cb%u from mcid(%u): %#016llx\n", (unsigned)m_mcid, (unsigned)mcid, (unsigned long long)addr);}
-
-    //Looking for the data in CB.
-    //Master thread from left core, or redundant from right,
-    //Both of them are mapped to left CB (i.e. CompBuffer0).
-    //The others are mapped to right CB (i.e. CompBuffer1).
-
     // FIXME: read completion / snoop should really use the arbitrator, too!
-
-    std::vector<request_buffer>& m_compBuffer = (coming_from_right == redundant) ? m_compBuffer0 : m_compBuffer1;   
-	
-    // merge with outgoing buffer.
+    
+	// merge with outgoing buffer.
     for (Buffer<Request>::const_iterator p = m_outgoing.begin(); p != m_outgoing.end(); ++p)
     {
 	if (p->write && p->address == addr)
@@ -316,37 +301,6 @@ bool CompBuffer::OnMemoryReadCompleted(MemAddr addr, const char* data, MCID mcid
 	    // This is a write to the same line, merge it
 	    line::blit(&mdata[0], p->data.data, p->data.mask, m_lineSize);
 	}
-    }
-	
-	
-    //It is a dcache request.
-    //And its sender is my client.
-    if(((mcid & 1) == 1) && (real_mcid == m_mcid))
-    {
-        //find the latest one
-	//COMMIT{printf("Try to Completed Read with merge in cb%u: %#016llx, mtid = %u, redundant = %u\n", (unsigned)m_mcid, (unsigned long long)addr, (unsigned)mtid, (unsigned)redundant);}
-        for (request_buffer::const_iterator p = m_compBuffer[mtid].begin(); p != m_compBuffer[mtid].end(); ++p)
-        {
-            //Hit
-            if(p->address == addr && p->redundant == redundant)
-            {
-		//COMMIT{printf("merge in cb%u: %#016llx, mtid = %u, redundant = %u\n", (unsigned)m_mcid, (unsigned long long)addr, (unsigned)mtid, (unsigned)redundant);}
-                //copy the data to mdate when mask is ture
-                line::blit(&mdata[0], p->data.data, p->data.mask, m_lineSize);
-                DebugMemWrite("Completed Read with merge in cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)addr);
-		/*
-		COMMIT{
-		    printf("Completed Read with merge in cb%u: %#016llx\n", (unsigned)m_mcid, (unsigned long long)addr);
-		    for (size_t i = 0; i < m_lineSize; i++)
-			printf("%d ", mdata[i]);
-		    printf("\n");
-		    for (size_t i = 0; i < m_lineSize; i++)
-			printf("%d ", data[i]);
-		    printf("\n");
-		}
-		*/
-            }
-        }
     }
 	
     Response response;
@@ -427,7 +381,7 @@ Result CompBuffer::DoOutgoing()
     }
     else
     {
-        if (!m_memory.Read(request.mcid, request.address))
+        if (!m_memory.Read(m_mcid, request.address))
         {
             DeadlockWrite("Unable to send read to 0x%016llx to memory, CB", (unsigned long long)request.address);
             return FAILED;
@@ -451,7 +405,7 @@ Result CompBuffer::DoIncoming()
     {
         for (std::vector<IMemoryCallback*>::const_iterator p = m_clients.begin(); p != m_clients.end(); ++p)
         {
-            if (*p != NULL && !(*p)->OnMemoryReadCompleted(response.address, response.data.data, 0))
+            if (*p != NULL && !(*p)->OnMemoryReadCompleted(response.address, response.data.data))
             {
                 DeadlockWrite("Unable to send read completion to clients from CompBuffer");
                 return FAILED;
