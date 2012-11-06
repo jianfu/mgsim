@@ -319,6 +319,7 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
         opt(DELEGATE) *
         opt(m_allocator.m_bundle ^ /* FIXME: is the bundle creation buffer really involved here? */
             (m_allocator.m_readyThreads1 * m_allocator.m_cleanup) ^
+			(m_allocator.m_readyThreads1 * m_allocator.m_rcleanup * m_allocator.m_cleanup) ^ /*[FT]*/
             m_allocator.m_cleanup ^
 	    (m_allocator.m_rcleanup * m_allocator.m_cleanup) ^ /*[FT]*/
             m_allocator.m_readyThreads1);
