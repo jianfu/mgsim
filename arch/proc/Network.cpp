@@ -1735,6 +1735,13 @@ string Processor::RemoteMessage::str() const
            << "]";
         ;
         break;
+	case MSG_RTHREADDONE:
+		ss << "[rtd"
+		   << " pid " << rtd.pid
+		   << " tid " << rtd.tid
+		   << "]";
+	   ;
+	   break;
     //FT-END
     default:
         assert(false); // all types should be listed here.

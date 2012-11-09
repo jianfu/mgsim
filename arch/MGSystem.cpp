@@ -596,17 +596,13 @@ void MGSystem::Disassemble(MemAddr addr, size_t sz) const
 {
     ostringstream cmd;
 
-    cmd << m_objdump_cmd << " -d -r --prefix-addresses --show-raw-insn --start-address=" << addr
-        << " --stop-address=" << addr + sz << " " << m_bootrom->GetProgramName();
-    clog << "Running " << cmd.str() << "..." << endl;
+    cmd << m_objdump_cmd << " -d -r \\\n   --prefix-addresses --show-raw-insn \\\n   --start-address=" << addr
+        << " --stop-address=" << addr + sz << " \\\n   " << m_bootrom->GetProgramName();
+    clog << "Command:" << endl << "  " << cmd.str() << endl;
     system(cmd.str().c_str());
 }
 
-MGSystem::MGSystem(Config& config,
-                   const vector<pair<RegAddr, RegValue> >& regs,
-                   const vector<pair<RegAddr, string> >& loads,
-                   const vector<string>& extradevs,
-                   bool quiet)
+MGSystem::MGSystem(Config& config, bool quiet)
     : m_kernel(m_breakpoints),
       m_clock(m_kernel.CreateClock(config.getValue<unsigned long>("CoreFreq"))),
       m_root("", m_clock),
@@ -786,9 +782,7 @@ MGSystem::MGSystem(Config& config,
     }
 
     // Create the I/O devices
-    vector<string> dev_names = extradevs;
-    vector<string> cfg_names = config.getWordList("IODevices");
-    copy(cfg_names.begin(), cfg_names.end(), back_inserter(dev_names));
+    vector<string> dev_names = config.getWordList("IODevices");
     size_t numIODevices = dev_names.size();
 
     m_devices.resize(numIODevices);
@@ -847,7 +841,7 @@ MGSystem::MGSystem(Config& config,
             m_devices[i] = uart;
             config.registerObject(*uart, "uart");
         } else if (dev_type == "SMC") {
-            SMC * smc = new SMC(name, m_root, iobus, devid, regs, loads, config);
+            SMC * smc = new SMC(name, m_root, iobus, devid, config);
             m_devices[i] = smc;
             config.registerObject(*smc, "smc");
         } else if (dev_type == "RPC") {
@@ -959,24 +953,46 @@ MGSystem::MGSystem(Config& config,
 
     // Find objdump command
 #if defined(TARGET_MTALPHA)
-    const char *default_objdump = "mtalpha-linux-gnu-objdump";
-    const char *objdump_var = "MTALPHA_OBJDUMP";
+# define OBJDUMP_VAR "MTALPHA_OBJDUMP"
+# if defined(OBJDUMP_MTALPHA)
+#  define OBJDUMP_CMD OBJDUMP_MTALPHA
+# endif
 #elif defined(TARGET_MTSPARC)
-    const char *default_objdump = "mtsparc-linux-gnu-objdump";
-    const char *objdump_var = "MTSPARC_OBJDUMP";
+# define OBJDUMP_VAR "MTSPARC_OBJDUMP"
+# if defined(OBJDUMP_MTSPARC)
+#  define OBJDUMP_CMD OBJDUMP_MTSPARC
+# endif
 #elif defined(TARGET_MIPS32)
-    const char *default_objdump = "mips-linux-gnu-objdump";
-    const char *objdump_var = "MIPS_OBJDUMP";
+# define OBJDUMP_VAR "MIPS32_OBJDUMP"
+# if defined(OBJDUMP_MIPS32)
+#  define OBJDUMP_CMD OBJDUMP_MIPS32
+# endif
 #elif defined(TARGET_MIPS32EL)
-    const char *default_objdump = "mipsel-linux-gnu-objdump";
-    const char *objdump_var = "MIPSEL_OBJDUMP";
+# define OBJDUMP_VAR "MIPS32EL_OBJDUMP"
+# if defined(OBJDUMP_MIPS32EL)
+#  define OBJDUMP_CMD OBJDUMP_MIPS32EL
+# endif
 #endif
-    const char *v = getenv(objdump_var);
-    if (!v) v = default_objdump;
+    const char *v = 0;
+#ifdef OBJDUMP_VAR
+    v = getenv(OBJDUMP_VAR);
+#endif
+    if (!v)
+    {
+#ifdef OBJDUMP_CMD
+        v = OBJDUMP_CMD;
+#else
+        if (!quiet)
+            cerr << "# Warning: platform-specific 'objdump' was not found and " OBJDUMP_VAR " is not set; cannot disassemble code." << endl;
+        v = "unknown-objdump";
+#endif
+    }
     m_objdump_cmd = v;
 
     if (!quiet)
     {
+        clog << "Location of `objdump': " << m_objdump_cmd << endl;
+
         static char const qual[] = {'M', 'G', 'T', 'P', 'E', 'Z', 'Y'};
         unsigned int q;
         for (q = 0; masterfreq % 1000 == 0 && q < sizeof(qual)/sizeof(qual[0]); ++q)

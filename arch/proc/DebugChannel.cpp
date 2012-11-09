@@ -25,10 +25,12 @@ Result Processor::DebugChannel::Read (MemAddr /*address*/, void* /*data*/, MemSi
 
 Result Processor::DebugChannel::Write(MemAddr address, const void *data, MemSize size, LFID fid, TID tid)
 {
-    address /= sizeof(Integer);
+    if (address % sizeof(Integer) != 0 || (size != 1 && size != sizeof(Integer)))
+    {
+        throw exceptf<SimulationException>(*this, "Invalid debug channel access: %#016llx (%u)", (unsigned long long)address, (unsigned)size);
+    }
 
-    if (size != 1 && size != sizeof(Integer))
-        return SUCCESS;
+    address /= sizeof(Integer);
 
     COMMIT{
 
@@ -36,13 +38,15 @@ Result Processor::DebugChannel::Write(MemAddr address, const void *data, MemSize
         Float   floatval;
         floatval.integer = value;
 
+        DebugIOWrite("Debug output by F%u/T%u: %#016llx (%llu) -> mode %u",
+                     (unsigned)fid, (unsigned)tid,
+                     (unsigned long long)value, (unsigned long long)value,
+                     (unsigned)address);
+
         switch (address)
         {
         case 0:
-            if (std::isprint((char)value))
-                m_output << (char)value;
-            else if ((char)value == '\n')
-                m_output << std::endl;
+            m_output << (char)value;
             break;
         case 1:
             m_output << std::dec << value;
@@ -62,12 +66,6 @@ Result Processor::DebugChannel::Write(MemAddr address, const void *data, MemSize
         }
 
         m_output.flush();
-
-
-        DebugIOWrite("Debug output by F%u/T%u: %#016llx (%llu) -> channel %u",
-                     (unsigned)fid, (unsigned)tid,
-                     (unsigned long long)value, (unsigned long long)value,
-                     (unsigned)address);
     }
     return SUCCESS;
 }

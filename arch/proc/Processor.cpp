@@ -39,6 +39,8 @@ Processor::Processor(const std::string& name, Object& parent, Clock& clock, PID 
     m_perfcounters(*this, config),
     m_lpout("stdout", *this, std::cout),
     m_lperr("stderr", *this, std::cerr),
+    m_mmu("mmu", *this),
+    m_action("action", *this),
     m_io_if(NULL)
 {
     config.registerProperty(*this, "pid", (uint32_t)pid);
@@ -65,6 +67,8 @@ Processor::Processor(const std::string& name, Object& parent, Clock& clock, PID 
     m_perfcounters.Connect(m_mmio, IOMatchUnit::READ, config);
     m_lpout.Connect(m_mmio, IOMatchUnit::WRITE, config);
     m_lperr.Connect(m_mmio, IOMatchUnit::WRITE, config);
+    m_mmu.Connect(m_mmio, IOMatchUnit::WRITE, config);
+    m_action.Connect(m_mmio, IOMatchUnit::WRITE, config);
 
     if (iobus != NULL)
     {
@@ -273,7 +277,7 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
         /* FT */                         opt(m_allocator.m_alloc) ^
         /* FT */                         opt(m_network.m_delegateOut * m_network.m_rlink.out * m_allocator.m_readyThreads2) ^
         /* FT */                         opt(m_network.m_delegateOut * m_network.m_link.out * m_allocator.m_readyThreads2)  ^
-        /* FT */                         opt(m_allocator.m_cleanup * m_allocator.m_cleanup));
+        /* FT */                         opt(m_allocator.m_rcleanup * m_allocator.m_cleanup));
 
     m_allocator.p_FamilyAllocate.SetStorageTraces(
         m_network.m_allocResponse.out ^ 

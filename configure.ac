@@ -20,6 +20,7 @@ AM_SILENT_RULES([yes])
 
 ## extra programs
 
+AC_PROG_RANLIB
 AC_PROG_SED
 AM_PATH_PYTHON([2.6], [], [AC_MSG_WARN([The 'readtrace' utility requires Python >= 2.6.])])
 
@@ -31,6 +32,9 @@ AC_CHECK_PROGS(m4_toupper([$1]), [m4_default([$3], [$1])],
 
 MY_OPT_PROG([help2man], [--help output to manpage converter], [help2man])
 MY_OPT_PROG([rst2man], [reStructuredText to manpage converter], [rst2man rst2man.py])
+MY_OPT_PROG([tbl], [Troff table converter], [tbl])
+MY_OPT_PROG([groff], [GNU roff formatter], [groff])
+MY_OPT_PROG([ps2pdf], [Postscript to PDF converter], [ps2pdf])
 
 ## language / library tests
 
@@ -211,131 +215,83 @@ if test "x$enable_cacti" = "xyes"; then
 fi
 AM_CONDITIONAL([ENABLE_CACTI], [test "x$enable_cacti" = "xyes"])
 
-
-## Target selection
-enable_mtalpha_tests=no
-enable_mtsparc_tests=no
-enable_mips_tests=no
-enable_mipsel_tests=no
-
-AC_ARG_VAR([AS_MTALPHA], [Location of the `as' utility configured for the MT-Alpha binary format.])
-AC_ARG_VAR([LD_MTALPHA], [Location of the `ld' utility configured for the MT-Alpha binary format.])
-AC_ARG_VAR([AS_MTSPARC], [Location of the `as' utility configured for the MT-Sparc binary format.])
-AC_ARG_VAR([LD_MTSPARC], [Location of the `ld' utility configured for the MT-Sparc binary format.])
-AC_ARG_VAR([AS_MIPS], [Location of the `as' utility configured for the MIPS binary format.])
-AC_ARG_VAR([LD_MIPS], [Location of the `ld' utility configured for the MIPS binary format.])
-AC_ARG_VAR([AS_MIPSEL], [Location of the `as' utility configured for the MIPSel binary format.])
-AC_ARG_VAR([LD_MIPSEL], [Location of the `ld' utility configured for the MIPSel binary format.])
-
-case "$target_cpu" in
-mtalpha)
-
-  AC_PATH_PROG([AS_MTALPHA], [mtalpha-linux-gnu-as], [no], [$prefix/bin$PATH_SEPARATOR$PATH])
-  AC_PATH_PROG([LD_MTALPHA], [mtalpha-linux-gnu-ld], [no], [$prefix/bin$PATH_SEPARATOR$PATH])
-
-  enable_mtalpha_tests=yes
-  if test "x$AS_MTALPHA" = "xno" \
-       -o "x$LD_MTALPHA" = "xno"; then
-     AC_MSG_WARN([Some Alpha/MT-Alpha utilities are missing. Cannot run Alpha test suite.])
-     enable_mtalpha_tests=no
-  fi
-
-  AC_DEFINE([TARGET_MTALPHA], [1],
-            [Define when building a simulator for MT-Alpha.])
-
-  ;;
-
-mtsparc)
-
-  AC_PATH_PROG([AS_MTSPARC], [mtsparc-linux-gnu-as], [no], [$prefix/bin$PATH_SEPARATOR$PATH])
-  AC_PATH_PROG([LD_MTSPARC], [mtsparc-linux-gnu-ld], [no], [$prefix/bin$PATH_SEPARATOR$PATH])
-
-  enable_mtsparc_tests=yes
-  if test "x$AS_MTSPARC" = "xno" \
-       -o "x$LD_MTSPARC" = "xno"; then
-     AC_MSG_WARN([Some Sparc/MT-Sparc utilities are missing. Cannot run Sparc test suite.])
-     enable_mtsparc_tests=no
-  fi
-
-  AC_DEFINE([TARGET_MTSPARC], [1],
-            [Define when building a simulator for MT-SPARC.])
-  ;;
-
-mips)
-
-  AC_PATH_PROG([AS_MIPS], [mips-linux-gnu-as], [no], [$prefix/bin$PATH_SEPARATOR$PATH])
-  AC_PATH_PROG([LD_MIPS], [mips-linux-gnu-ld], [no], [$prefix/bin$PATH_SEPARATOR$PATH])
-
-  enable_mips_tests=yes
-  if test "x$AS_MIPS" = "xno" \
-       -o "x$LD_MIPS" = "xno"; then
-     AC_MSG_WARN([Some MIPS utilities are missing. Cannot run MIPS test suite.])
-     enable_mips_tests=no
-  fi
-
-  AC_DEFINE([TARGET_MIPS32], [1],
-            [Define when building a simulator for MIPS32 (BE).])
-  ;;
-
-mipsel)
-
-  AC_PATH_PROG([AS_MIPSEL], [mipsel-linux-gnu-as], [no], [$prefix/bin$PATH_SEPARATOR$PATH])
-  AC_PATH_PROG([LD_MIPSEL], [mipsel-linux-gnu-ld], [no], [$prefix/bin$PATH_SEPARATOR$PATH])
-
-  enable_mipsel_tests=yes
-  if test "x$AS_MIPSEL" = "xno" \
-       -o "x$LD_MIPSEL" = "xno"; then
-     AC_MSG_WARN([Some MIPSel utilities are missing. Cannot run MIPSel test suite.])
-     enable_mipsel_tests=no
-  fi
-
-  AC_DEFINE([TARGET_MIPS32EL], [1],
-            [Define when building a simulator for MIPS32 (LE).])
-  ;;
-
-*)
-  AC_MSG_ERROR([Unknown simulation target: $target_cpu (did you use --target?)])
-
-esac
-
-AM_CONDITIONAL([ENABLE_MTSPARC_TESTS], [test x$enable_mtsparc_tests = xyes])
-AM_CONDITIONAL([ENABLE_MTALPHA_TESTS], [test x$enable_mtalpha_tests = xyes])
-AM_CONDITIONAL([ENABLE_MIPS_TESTS], [test x$enable_mips_tests = xyes])
-AM_CONDITIONAL([ENABLE_MIPSEL_TESTS], [test x$enable_mipsel_tests = xyes])
-
-enable_compiled_tests=no
+## Check if 'slc' is available.
 
 AC_PATH_PROG([SLC], [slc], [no], [$prefix/bin$PATH_SEPARATOR$PATH])
-if test "x$SLC" != "x:" ; then
-   case "$target_cpu" in
-        mtalpha)
-           AC_MSG_CHECKING([whether $SLC supports -b mta_n])
-           AC_LANG_CONFTEST([AC_LANG_SOURCE([int main(void) { return 0; }])])
-           if $SLC -b mta_n -c -o conftest.o conftest.c; then
-             AC_MSG_RESULT([yes])
-             enable_compiled_tests=yes
-           else
-             AC_MSG_RESULT([no])
-             AC_MSG_WARN([borked $SLC -b mta_n. Cannot run the compiled MT-Alpha test suite.])
-           fi
-           ;;
-        mtsparc)
-           AC_MSG_CHECKING([whether $SLC supports -b mtsn_n])
-           AC_LANG_CONFTEST([AC_LANG_SOURCE([int main(void) { return 0; }])])
-           if $SLC -b mtsn_n -c -o conftest.o conftest.c; then
-              AC_MSG_RESULT([yes])
-              enable_compiled_tests=yes
-           else
-              AC_MSG_RESULT([no])
-              AC_MSG_WARN([borked $SLC -b mtsn_n. Cannot run the compiled MT-Sparc test suite.])
-           fi
-           ;;
-  esac
-else
-   AC_MSG_WARN([slc not found. Cannot run the compiled test suite.])
+
+## Target selection
+
+m4_define([MGS_TARGET_CHECK],
+[dnl
+AC_ARG_VAR([AS_$2], [Location of the `as' utility configured for the $3 binary format.])
+AC_ARG_VAR([LD_$2], [Location of the `ld' utility configured for the $3 binary format.])
+AC_ARG_VAR([OBJDUMP_$2], 
+           [Location of the `objdump' utility configured for the $3 binary format.])
+
+enable_[$1]_tests=no
+enable_compiled_[$1]_tests=no
+
+have_[$1]_binutils=no
+AC_PATH_PROG([AS_$2], [$4-as], [no], [$prefix/bin$PATH_SEPARATOR$PATH])
+AC_PATH_PROG([LD_$2], [$4-ld], [no], [$prefix/bin$PATH_SEPARATOR$PATH])
+if test "x$AS_$2" != "xno" -a "x$LD_$2" != "xno"; then
+   have_[$1]_binutils=yes
 fi
 
-AM_CONDITIONAL([ENABLE_C_TESTS], [test x$enable_compiled_tests = xyes])
+if test "x$target_cpu" = "x$1"; then
+
+  if test "x$have_[$1]_binutils" != xyes; then
+     AC_MSG_WARN([Some $3 utilities are missing. Cannot run the $3 test suite.])
+  else
+     enable_[$1]_tests=yes
+  fi
+
+  AC_PATH_PROG([OBJDUMP_$2], [$4-objdump], [no], [$prefix/bin$PATH_SEPARATOR$PATH]) 
+  if test "x$OBJDUMP_$2" != xno; then
+     AC_DEFINE_UNQUOTED([OBJDUMP_$2], ["$OBJDUMP_$2"],
+                        [Define to the location of the `objdump' utility for $3.])
+  fi
+
+  if test "x$SLC" != "x:" ; then
+    AC_MSG_CHECKING([whether $SLC supports -b $5])
+    AC_LANG_CONFTEST([AC_LANG_SOURCE([int main(void) { return 0; }])])
+    if $SLC -b $5 -c -o conftest.o conftest.c >/dev/null 2>&1; then
+      AC_MSG_RESULT([yes])
+      enable_compiled_[$1]_tests=yes
+    else
+      AC_MSG_RESULT([no])
+      AC_MSG_WARN([borked $SLC -b $5. Cannot run the compiled $3 test suite.])
+    fi
+  else
+    AC_MSG_WARN([slc not found. Cannot run the compiled $3 test suite.])
+  fi
+
+  target_found=yes
+  AC_DEFINE([TARGET_$2], [1],
+            [Define when building a simulator using the $3 core model.])
+
+fi
+
+AM_CONDITIONAL([HAVE_$2_BINUTILS], [test x$have_$1_binutils = xyes])
+AM_CONDITIONAL([ENABLE_$2_TESTS], [test x$enable_$1_tests = xyes])
+AM_CONDITIONAL([ENABLE_COMPILED_$2_TESTS], [test x$enable_compiled_$1_tests = xyes])
+
+
+])
+
+enable_compiled_tests=no
+target_found=no
+
+MGS_TARGET_CHECK([mtalpha], [MTALPHA], [MT-Alpha], [mtalpha-linux-gnu], [mta_n])
+MGS_TARGET_CHECK([mtsparc], [MTSPARC], [MT-SPARC], [mtsparc-linux-gnu], [mtsn_n])
+MGS_TARGET_CHECK([mips], [MIPS32], [MIPS (no MT)], [mips-linux-gnu], [mips_s])
+MGS_TARGET_CHECK([mipsel], [MIPS32EL], [MIPSel (no MT)], [mipsel-linux-gnu], [mipsel_s])
+
+if test $target_found = no; then
+  AC_MSG_ERROR([Unsupported simulated core model: $target_cpu (did you use --target?)])
+fi
+
+AC_SUBST([GET_TEST_LIST],['$(TEST_LIST)'])
 
 AC_CONFIG_FILES([
 	Makefile
@@ -345,8 +301,6 @@ AC_CONFIG_FILES([
 ])
 AC_CONFIG_FILES([tools/readtrace], [chmod +x tools/readtrace])
 AC_CONFIG_FILES([tools/viewlog], [chmod +x tools/viewlog])
-AC_CONFIG_FILES([tools/aslink], [chmod +x tools/aslink])
-AC_CONFIG_FILES([tools/compile], [chmod +x tools/compile])
 
 AC_OUTPUT
 
@@ -378,6 +332,12 @@ Now run:
 
     make all
     make check
+
+    # then optionally:
+    make install
+
+    # to generate PDF versions of the manual pages:
+    cd doc && make pdf
 
 EOF
 

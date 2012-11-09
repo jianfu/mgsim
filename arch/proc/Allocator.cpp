@@ -1437,8 +1437,15 @@ Result Processor::Allocator::DoFamilyAllocate()
     //FT-END
 
     
-    if ((lfid == INVALID_LFID) && (req.completion_reg != INVALID_REG_INDEX))
+
+    if (lfid == INVALID_LFID)
     {
+        // Bundle creations are always suspending, so it is not
+        // possible that the request is a bundle, allocation failed
+        // and that the control flow arrives here.
+        assert(!req.bundle);
+        assert(req.completion_reg != INVALID_REG_INDEX);
+
         // No family entry was available and we don't want to suspend until one is.
         if (req.prev_fid == INVALID_LFID)
         {
@@ -1504,10 +1511,16 @@ Result Processor::Allocator::DoFamilyAllocate()
             //FT-END
         }
         DebugSimWrite("F%u finished allocation on %u cores", (unsigned)lfid, (unsigned)family.numCores);
-
-        if (req.completion_reg != INVALID_REG_INDEX)
+        
+        if (!req.bundle)
         {
-            if (req.prev_fid == INVALID_LFID)
+            // Here we have a regular allocation request, where either:
+            // - we have reached the first core after committing, and the parent
+            //   is waiting on an acknowledgement for the allocate itself. Send it.
+            // - or we need to commit the request to the previous cores in the
+            //   place via the link network.
+            
+            if (req.prev_fid == INVALID_LFID) 
             {
                 // We're the only core in the family
                 // Construct a global FID for this family
@@ -1558,27 +1571,31 @@ Result Processor::Allocator::DoFamilyAllocate()
                               (unsigned)(m_parent.GetPID() - 1), (unsigned)ret.prev_fid);
             }
         }
-
-        if (req.bundle)
+        else
         {
-            FID fid;
-            fid.pid        = m_parent.GetPID();
-            fid.lfid       = lfid;
-            fid.capability = family.capability;
+            // bundle request:
+            // do not notify the allocation; we need to wait for creation
+            // before notifying. This is because otherwise the parent could issue
+            // a sync before the creation occurs, and this is not supported. The
+            // parent must wait until creation starts.
 
+            // Instead, trigger creation by sending a creation request via loopback.
+            
             RemoteMessage msg;
             msg.type                  = RemoteMessage::MSG_CREATE;
+            msg.create.fid.pid        = m_parent.GetPID();
+            msg.create.fid.lfid       = lfid;
+            msg.create.fid.capability = family.capability;
             msg.create.address        = req.binfo.pc;
-            msg.create.fid            = fid;
-            msg.create.completion_pid = req.completion_pid;
             msg.create.completion_reg = req.completion_reg;
+            msg.create.completion_pid = req.completion_pid;
+            msg.create.bundle         = true;
             msg.create.parameter      = req.binfo.parameter;
             msg.create.index          = req.binfo.index;
-            msg.create.bundle         = true;
 
             if (!m_network.SendMessage(msg))
             {
-                DeadlockWrite("Unable to send remote bundle allocation");
+                DeadlockWrite("Unable to send bundle creation to loopback");
                 return FAILED;
             }
 

@@ -1,10 +1,22 @@
-	.text
-	.align	2
 	.globl	main
-	.set	nomips16
 	.ent	main
-	.type	main, @function
 main:
-	nop
+	# make sure r0 and beq work
+	beq	$0, $0, good
+bad:
+	# abort
+	sw      $0, 0x268($0)
+good:
+	# make sure register writes/reads, bne and nop work
+	li	$8, 5
+	bne	$9, $8, bad
+	# exit
+	sw      $0, 0x26c($0)
+        nop
+        nop
+        nop
+        nop
+        nop
 	.end	main
-	.size	main, .-main
+        .section .rodata
+	.ascii "\0TEST_INPUTS:R8:5\0"

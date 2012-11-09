@@ -6,6 +6,8 @@
 #include "commands.h"
 #include <arch/MGSystem.h>
 #include <sim/config.h>
+#include <sim/configparser.h>
+#include <sim/readfile.h>
 
 #ifdef ENABLE_MONITOR
 # include <sim/monitor.h>
@@ -38,8 +40,7 @@ struct ProgramConfig
     bool                             m_earlyquit;
     ConfigMap                        m_overrides;
     vector<string>                   m_extradevs;
-    vector<pair<RegAddr, string> >   m_loads;
-    vector<pair<RegAddr, RegValue> > m_regs;
+    vector<string>                   m_regs;
     bool                             m_dumptopo;
     string                           m_topofile;
     bool                             m_dumpnodeprops;
@@ -58,7 +59,6 @@ struct ProgramConfig
           m_earlyquit(false),
           m_overrides(),
           m_extradevs(),
-          m_loads(),
           m_regs(),
           m_dumptopo(false),
           m_topofile(),
@@ -72,7 +72,7 @@ extern "C"
 {
 const char *argp_program_version =
     "mgsim " PACKAGE_VERSION "\n"
-    "Copyright (C) 2008,2009,2010,2011 Universiteit van Amsterdam.\n"
+    "Copyright (C) 2008,2009,2010,2011,2012 Universiteit van Amsterdam.\n"
     "\n"
     "Written by Mike Lankamp. Maintained by the Microgrid project.";
 
@@ -98,9 +98,11 @@ static const struct argp_option mgsim_options[] =
     { 0, 'F', "NUM VALUE", 0, "Store the float VALUE in the specified FP register of the initial thread.", 1 },
     { 0, 'L', "NUM FILE", 0, "Create an ActiveROM component with the contents of FILE and store the address in the specified register of the initial thread.", 1 },
 
-    { "config", 'c', "FILE", 0, "Read configuration from FILE.", 2 },
+    { "config", 'c', "FILE", 0, "Read default configuration from FILE. "
+      "The contents of this file are considered after all overrides (-o/-I).", 2 },
     { "dump-configuration", 'd', 0, 0, "Dump configuration to standard error prior to program startup.", 2 },
-    { "override", 'o', "NAME=VAL", 0, "Overrides the configuration option NAME with value VAL. Can be specified multiple times.", 2 },
+    { "override", 'o', "NAME=VAL", 0, "Add override option NAME with value VAL. Can be specified multiple times.", 2 },
+    { "include", 'I', "FILE", 0, "Read extra override options from FILE. Can be specified multiple times.", 2 },
 
     { "do-nothing", 'n', 0, 0, "Exit before the program starts, but after the system is configured.", 3 },
     { "quiet", 'q', 0, 0, "Do not print simulation statistics after execution.", 3 },
@@ -121,7 +123,7 @@ static const struct argp_option mgsim_options[] =
     { "monitor", 'm', 0, 0, "Enable asynchronous simulation monitoring (configure with -o MonitorSampleVariables).", 7 },
 #endif
 
-    { 0, 's', 0, 0, "(obsolete; symbols are now read automatically from ELF)", 8 },
+    { "symtable", 's', "FILE", OPTION_HIDDEN, "(obsolete; symbols are now read automatically from ELF)", 8 },
 
     { 0, 0, 0, 0, 0, 0 }
 };
@@ -167,76 +169,46 @@ static error_t mgsim_parse_opt(int key, char *arg, struct argp_state *state)
             }
             string name = sarg.substr(0, eq);
 
-            // push overrides in inverse order, so that the latest
-            // specified in the command line has higher priority in
-            // matching.
-            config.m_overrides.insert(name, sarg.substr(eq + 1));
+            config.m_overrides.append(name, sarg.substr(eq + 1));
+    }
+    break;
+    case 'I':
+    {
+        ConfigParser parser(config.m_overrides);
+        parser(read_file(arg));
     }
     break;
     case 'L':
     {
+        string regnum(arg);
         if (state->next == state->argc) {
-            throw runtime_error("Error: -L<N> expected filename");
+            throw runtime_error("Error: -L" + regnum + " expected filename");
         }
         string filename(state->argv[state->next++]);
-        string regnum(arg);
-        char* endptr;
-        unsigned long index = strtoul(regnum.c_str(), &endptr, 0);
-        if (*endptr != '\0') {
-            throw runtime_error("Error: invalid register specifier in option: " + regnum);
-        }
-        RegAddr  regaddr = MAKE_REGADDR(RT_INTEGER, index);
 
-        string devname = "file" + regnum;
+        string devname = "rom_file" + regnum;
         config.m_extradevs.push_back(devname);
         string cfgprefix = devname + ":";
         config.m_overrides.append(cfgprefix + "Type", "AROM");
         config.m_overrides.append(cfgprefix + "ROMContentSource", "RAW");
         config.m_overrides.append(cfgprefix + "ROMFileName", filename);
-        config.m_loads.push_back(make_pair(regaddr, devname));
+        config.m_regs.push_back("R" + regnum + "=B" + devname);
     }
     break;
     case 'R': case 'F':
     {
+        string regnum;
+        regnum += (char)key;
+        regnum += arg;
         if (state->next == state->argc) {
-            throw runtime_error("Error: -R/-F expected register value");
+            throw runtime_error("Error: -" + regnum + ": expected register value");
         }
 
-        stringstream value;
-        value << state->argv[state->next++];
-
-        RegAddr  addr;
-        RegValue val;
-
-        char* endptr;
-        unsigned long index = strtoul(arg, &endptr, 0);
-        if (*endptr != '\0') {
-            throw runtime_error("Error: invalid register specifier in option");
-        }
-
-        if (key == 'R') {
-            value >> *(SInteger*)&val.m_integer;
-            addr = MAKE_REGADDR(RT_INTEGER, index);
-        } else {
-            double f;
-            value >> f;
-            val.m_float.fromfloat(f);
-            addr = MAKE_REGADDR(RT_FLOAT, index);
-        }
-        if (value.fail()) {
-            throw runtime_error("Error: invalid value for register");
-        }
-        val.m_state = RST_FULL;
-        config.m_regs.push_back(make_pair(addr, val));
+        config.m_regs.push_back(regnum + "=" + state->argv[state->next++]);
     }
     break;
     case ARGP_KEY_ARG: /* extra arguments */
     {
-        if (config.m_argv.empty())
-        {
-            cerr << "# Warning: converting first extra argument to -o *:ROMFileName=" << arg << endl;
-            config.m_overrides.append("*:ROMFileName", arg);
-        }
         config.m_argv.push_back(arg);
     }
     break;
@@ -286,9 +258,32 @@ int main(int argc, char** argv)
 
         argp_parse(&argp, argc, argv, 0, 0, &config);
 
+        // Convert the remaining m_regs to an override
+        {
+            ostringstream s;
+            for (size_t i = 0; i < config.m_regs.size(); ++i)
+            {
+                if (i)
+                    s << ',';
+                s << config.m_regs[i];
+            }
+            config.m_overrides.append("CmdLineRegs", s.str()); 
+        }
+
         if (config.m_quiet)
         {
             config.m_overrides.append("*.ROMVerboseLoad", "false");
+        }
+        if (!config.m_extradevs.empty())
+        {
+            string n;
+            for (size_t i = 0; i < config.m_extradevs.size(); ++i)
+            {
+                if (i > 0)
+                    n += ',';
+                n += config.m_extradevs[i];
+            }
+            config.m_overrides.append("CmdLineFileDevs", n);
         }
 
         if (config.m_interactive)
@@ -310,9 +305,6 @@ int main(int argc, char** argv)
 
         // Create the system
         MGSystem sys(configfile,
-                     config.m_regs,
-                     config.m_loads,
-                     config.m_extradevs,
                      !config.m_interactive);
 
 #ifdef ENABLE_MONITOR
@@ -355,7 +347,7 @@ int main(int argc, char** argv)
         }
 
         if (config.m_earlyquit)
-            exit(0);
+            return 0;
 
         bool interactive = config.m_interactive;
         if (!interactive)
@@ -418,8 +410,21 @@ int main(int argc, char** argv)
     }
     catch (const exception& e)
     {
-        PrintException(cerr, e);
-        return 1;
+        const ProgramTerminationException *ex = dynamic_cast<const ProgramTerminationException*>(&e);
+        if (ex != NULL)
+        {
+            // The program is telling us how to terminate. Do it.
+            if (ex->TerminateWithAbort())
+                abort();
+            else
+                return ex->GetExitCode();
+        }
+        else
+        {
+            // No more information, simply terminate with error.
+            PrintException(cerr, e);
+            return 1;
+        }
     }
 
     return 0;

@@ -96,11 +96,7 @@ namespace Simulator {
         void Step(CycleNo nCycles);
         void Abort() { GetKernel().Abort(); }
 
-        MGSystem(Config& config,
-                 const std::vector<std::pair<RegAddr, RegValue> >& regs,
-                 const std::vector<std::pair<RegAddr, std::string> >& loads,
-                 const std::vector<std::string>& extradevs,
-                 bool quiet);
+        MGSystem(Config& config, bool quiet);
         MGSystem(const MGSystem&) = delete;
         MGSystem& operator=(const MGSystem&) = delete;
 

@@ -29,9 +29,13 @@
 #serial 1
 
 m4_define([_AX_CXX_COMPILE_STDCXX_11_testbody], [
+  #include <list>
+
   template <typename T>
     struct check
     {
+      check(int x) {}
+      check() : check(42) {}
       static_assert(sizeof(int) <= sizeof(T), "not big enough");
     };
 
@@ -39,6 +43,9 @@ m4_define([_AX_CXX_COMPILE_STDCXX_11_testbody], [
 
     int a;
     decltype(a) b;
+    auto x = a;
+    std::list<int> y;
+    void foo() { for (auto z : y) ; }
 
     typedef check<int> check_type;
     check_type c;
