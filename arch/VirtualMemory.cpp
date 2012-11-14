@@ -24,15 +24,12 @@ static const MemAddr ALIGNMENT = 64;
 
 void VirtualMemory::ReportOverlap(MemAddr address, MemSize size) const
 {	
-	//[FT]
-	/*
     ostringstream os;
     VirtualMemory::Cmd_Info(os, vector<string>());
     InvalidArgumentException e = exceptf<InvalidArgumentException>("Overlap in memory reservation (%#016llx, %zd)",
                                                                    (unsigned long long)address, (size_t)size);
     e.AddDetails(os.str());
     throw e;
-	*/
 }
 
 void VirtualMemory::Reserve(MemAddr address, MemSize size, ProcessID pid, int perm)
@@ -46,7 +43,9 @@ void VirtualMemory::Reserve(MemAddr address, MemSize size, ProcessID pid, int pe
             if (p->first == address || (address < p->first && address + size > p->first))
             {
                 // The range overlaps with an existing range after it
-                ReportOverlap(address, size);
+                //[FT]
+				//ReportOverlap(address, size);
+				return;
             }
         }
         if (p != m_ranges.begin())
@@ -56,7 +55,9 @@ void VirtualMemory::Reserve(MemAddr address, MemSize size, ProcessID pid, int pe
             if (q->first + q->second.size > address)
             {
                 // The range overlaps with an existing range before it
-                ReportOverlap(address, size);
+                //[FT]
+				//ReportOverlap(address, size);
+				return;
             }
         }
 
