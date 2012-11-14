@@ -87,16 +87,24 @@ void VirtualMemory::Unreserve(MemAddr address, MemSize size)
     auto p = m_ranges.find(address);
     if (p == m_ranges.end())
     {
+		//[FT]
+		/*
         throw exceptf<InvalidArgumentException>("Attempting to unreserve non-reserved memory (%#016llx)",
                                                 (unsigned long long)address);
-    }
+		*/
+		return;
+	}
 
     if (size != p->second.size)
     {
+		//[FT]
+		/*
         throw exceptf<InvalidArgumentException>("Cannot unreserve %#016llx bytes from %#016llx, reservation was for %#016llx bytes",
                                                 (unsigned long long)size,
                                                 (unsigned long long)address,
                                                 (unsigned long long)p->second.size);
+		*/
+		return;
     }
     m_totalreserved -= p->second.size;
     --m_nRanges;
