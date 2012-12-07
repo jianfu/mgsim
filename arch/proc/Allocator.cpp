@@ -257,6 +257,7 @@ bool Processor::Allocator::RescheduleThread(TID tid, MemAddr pc)
 
     // The thread can be added to the ready queue
     ThreadQueue tq = {tid, tid};
+	assert (tid != INVALID_TID);
     if (!ActivateThreads(tq))
     {
         DeadlockWrite("F%u/T%u unable to reschedule", (unsigned)thread.family, (unsigned)tid);
@@ -460,6 +461,7 @@ bool Processor::Allocator::AllocateThread(LFID fid, TID tid, bool isNewlyAllocat
     }
 
     ThreadQueue tq = {tid, tid};
+	assert (tid != INVALID_TID);
     if (!ActivateThreads(tq))
     {
         // Abort allocation
@@ -630,6 +632,7 @@ bool Processor::Allocator::DecreaseThreadDependency(TID tid, ThreadDependency de
         {
             // Wake up the thread that was waiting on it
             ThreadQueue tq = {tid, tid};
+			assert (tid != INVALID_TID);
             if (!ActivateThreads(tq))
             {
                 return false;
@@ -1007,7 +1010,7 @@ Result Processor::Allocator::DoThreadAllocate()
 					{
 						if(m_cleanup.Push(tid))
 						{
-							COMMIT{	thread.cleanupFlag = 1; }
+							COMMIT{ thread.cleanupFlag = 1; }
 							DebugSimWrite("F%u/T%u(%llu) is pushed in to m_cleanup again",
                                       (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
 							return SUCCESS;
@@ -2205,32 +2208,76 @@ Result Processor::Allocator::DoFamilyCreate()
 Result Processor::Allocator::DoThreadActivation()
 {
     TID tid;
-    
     ThreadList*  curReadyList;
+	ThreadList*  list;
+	list = &m_readyThreads3;
 	
-    if ((m_prevReadyList == &m_readyThreads2 || m_readyThreads2.Empty()) && !m_readyThreads1.Empty()) {
-        curReadyList = &m_readyThreads1;
-    } else {
-        assert(!m_readyThreads2.Empty());
-        curReadyList = &m_readyThreads2;
-    }
+	if (m_prevReadyList == &m_readyThreads1)
+	{
+		if (!m_readyThreads2.Empty())
+			curReadyList = &m_readyThreads2;
+		else if (!m_readyThreads3.Empty())
+			curReadyList = &m_readyThreads3;
+		else
+		{
+			assert(!m_readyThreads1.Empty());
+			curReadyList = &m_readyThreads1;
+		}
+	}
+	else if (m_prevReadyList == &m_readyThreads2)
+	{
+		if (!m_readyThreads3.Empty())
+			curReadyList = &m_readyThreads3;
+		else if (!m_readyThreads1.Empty())
+			curReadyList = &m_readyThreads1;
+		else
+		{
+			assert(!m_readyThreads2.Empty());
+			curReadyList = &m_readyThreads2;
+		}
+	}
+	else
+	{
+		if (!m_readyThreads1.Empty())
+			curReadyList = &m_readyThreads1;
+		else if (!m_readyThreads2.Empty())
+			curReadyList = &m_readyThreads2;
+		else
+		{
+			assert(!m_readyThreads3.Empty());
+			curReadyList = &m_readyThreads3;
+		}
+	}
 
+	
     COMMIT{ m_prevReadyList = curReadyList; }
     
     tid = curReadyList->Front();
-    
+    curReadyList->Pop();
+	
+	assert (tid != INVALID_TID);
+	
     //FT-BEGIN
     Thread& thread = m_threadTable[tid];
     Family& family = m_familyTable[thread.family];
 
 	if (family.redundant && family.ftmode && (thread.mtid == INVALID_TID) && !family.broken)  //redundant family without mtid  //except "break"
     {
+		COMMIT{thread.next = INVALID_TID;}
+		ThreadQueue tq = {tid, tid};
+		assert (tid != INVALID_TID);
+		if (!QueueThreads(*list, tq, TST_READY))
+		{
+			DeadlockWrite("Unable to enqueue threads to the Ready Queue again, RT");
+			return FAILED;
+		}
+		
         DebugSimWrite("F%u T%u: Redundant thread activation failed.\n", (unsigned)thread.family, (unsigned)tid);
         return SUCCESS;
     }
     //FT-END
     
-    curReadyList->Pop();
+    
 	
 
     COMMIT{ --m_numThreadsPerState[TST_READY]; }
@@ -2330,6 +2377,30 @@ bool Processor::Allocator::FindReadyThread(LFID fid, TID mtid, uint64_t index)
         }
     }
 
+	if (!m_readyThreads3.Empty())
+    {
+        TID cur3 = m_readyThreads3.Front();
+		
+        while (cur3 != m_readyThreads3.End())
+        {
+            Thread& thread = m_threadTable[cur3];
+            cur3 = thread.next;
+			
+            if (thread.family == fid && thread.index == index)
+            {
+                thread.mtid = mtid;
+                return true;
+            }
+        }
+		
+        Thread& thread = m_threadTable[cur3];
+        if (thread.family == fid && thread.index == index)
+        {
+            thread.mtid = mtid;
+            return true;
+        }
+    }
+	
     return false;
 }
 //FT-END
@@ -2411,6 +2482,7 @@ Processor::Allocator::Allocator(const string& name, Processor& parent, Clock& cl
     m_createLine    (0),
     m_readyThreads1 ("q_readyThreads1", *this, clock, threadTable),
     m_readyThreads2 ("q_readyThreads2", *this, clock, threadTable),
+	m_readyThreads3 ("q_readyThreads3", *this, clock, threadTable), //[FT]
     m_prevReadyList (NULL),
 
     m_allocRequestsSuspend  ("b_allocRequestsSuspend",   *this, clock, config.getValue<BufferSize>(*this, "FamilyAllocationSuspendQueueSize")),
@@ -2441,6 +2513,7 @@ Processor::Allocator::Allocator(const string& name, Processor& parent, Clock& cl
     m_cleanup       .Sensitive(p_ThreadAllocate);
     m_readyThreads1 .Sensitive(p_ThreadActivation);
     m_readyThreads2 .Sensitive(p_ThreadActivation);
+	m_readyThreads3 .Sensitive(p_ThreadActivation); //[FT]
     m_activeThreads .Sensitive(pipeline.p_Pipeline); // Fetch Stage is sensitive on this list
 
     m_allocRequestsSuspend  .Sensitive(p_FamilyAllocate);

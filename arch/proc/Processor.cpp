@@ -277,7 +277,8 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
         /* FT */                         opt(m_allocator.m_alloc) ^
         /* FT */                         opt(m_network.m_delegateOut * m_network.m_rlink.out * m_allocator.m_readyThreads2) ^
         /* FT */                         opt(m_network.m_delegateOut * m_network.m_link.out * m_allocator.m_readyThreads2)  ^
-        /* FT */                         opt(m_allocator.m_rcleanup * m_allocator.m_cleanup));
+        /* FT */                         opt(m_allocator.m_rcleanup * m_allocator.m_cleanup) ^
+		/* FT */ 						 opt(m_allocator.m_cleanup * m_allocator.m_cleanup));
 
     m_allocator.p_FamilyAllocate.SetStorageTraces(
         m_network.m_allocResponse.out ^ 
@@ -298,7 +299,8 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
         /* CREATE_NOTIFY */                 opt(DELEGATE) );
 
     m_allocator.p_ThreadActivation.SetStorageTraces(
-        opt(m_allocator.m_activeThreads ^ m_icache.m_outgoing) );
+        opt(m_allocator.m_activeThreads ^ m_icache.m_outgoing 
+			^ m_allocator.m_readyThreads3 /*[FT]*/));
 
     m_allocator.p_Bundle.SetStorageTraces( m_dcache.m_outgoing ^ DELEGATE );
 

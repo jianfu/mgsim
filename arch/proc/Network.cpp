@@ -991,7 +991,7 @@ Result Processor::Network::DoDelegationIn()
 
             if (!SendMessage(response))
             {
-                DeadlockWrite("Unable to buffer outgoing remote register response, RMT_MSG_PAIR");
+                DeadlockWrite("Unable to buffer outgoing remote register response to Core %u, RMT_MSG_PAIR", (unsigned)response.rawreg.pid);
                 return FAILED;
             }
         }
