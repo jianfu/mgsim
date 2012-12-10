@@ -669,7 +669,7 @@ bool Processor::Allocator::DecreaseThreadDependency(TID tid, ThreadDependency de
 		//FT-BEGIN
 		else
 		{	
-		    COMMIT{ 
+		    COMMIT{
 		    thread.cleanupFlag = 0; 
 		    }
 		}
@@ -947,7 +947,7 @@ Result Processor::Allocator::DoThreadAllocate()
 	    if (family.hasShareds && family.physBlockSize > 1)
 	    {
 		// Mark 'previous thread cleaned up' on the next thread
-		if (thread.nextInBlock == INVALID_TID)
+		if (thread.nextInBlock == INVALID_TID || thread.nextInBlock == tid) //[FT]when master BS bigger than redundant, the actual usage of BS is smaller than physBS in master family.
 		{
 		    COMMIT{ family.prevCleanedUp = true; }
 		    DebugSimWrite("F%u/T%u(%llu) marking PREV_CLEANED_UP on family (no next thread)",
@@ -956,8 +956,8 @@ Result Processor::Allocator::DoThreadAllocate()
 		else if (!DecreaseThreadDependency(thread.nextInBlock, THREADDEP_PREV_CLEANED_UP))
 		{
 		    DeadlockWrite("F%u/T%u(%llu) marking PREV_CLEANED_UP on next T%u",
-			          (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index,
-			          (unsigned)thread.nextInBlock);
+				    (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index,
+				    (unsigned)thread.nextInBlock);
 		    return FAILED;
 		}
 	    }
@@ -999,80 +999,76 @@ Result Processor::Allocator::DoThreadAllocate()
         //FT-BEGIN
         else 
         {
-			//ftmode
-			if(family.ftmode)
+	    //ftmode
+	    if(family.ftmode)
+	    {
+		//master family  
+		if (!family.redundant)
+		{	
+		    //the mathing thread in redundant thread is not created	
+		    if (family.rthreadCount == 0)
+		    {
+			if(m_cleanup.Push(tid))
 			{
-				//master family  
-				if (!family.redundant)
-				{	
-                //the mathing thread in redundant thread is not created
-					if (family.rthreadCount == 0)
-					{
-						if(m_cleanup.Push(tid))
-						{
-							COMMIT{ thread.cleanupFlag = 1; }
-							DebugSimWrite("F%u/T%u(%llu) is pushed in to m_cleanup again",
-                                      (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
-							return SUCCESS;
-						}
-						else
-						{
-							DebugSimWrite("F%u/T%u(%llu) can not be pushed in to m_cleanup again",
-										(unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
-							return FAILED;
-						}
-					
-					}
-					else
-					{
-						COMMIT 
-						{
-							family.rthreadCount--;
-							thread.cleanupFlag = 0; 
-						}
-					
-						RemoteMessage msg;
-						msg.type                   = RemoteMessage::MSG_MASTERTID;
-						msg.mtid.pid               = m_parent.GetPID()+1-(m_parent.GetPID()%2)*2;
-						msg.mtid.lfid              = family.corr_fid;
-						msg.mtid.tid               = tid;
-						msg.mtid.index             = family.start;
-					
-						if (!m_network.SendMessage(msg))
-						{
-							DeadlockWrite("Unable to send masterTID, m_cleanup");
-							return FAILED;
-						}
-					}
-				}
-				else //redundant family
-				{
-					//send message to make 'threadCount' in master family increment 
-					RemoteMessage msg;
-					msg.type                   = RemoteMessage::MSG_RTHREADCOUNT;
-					msg.rtc.pid                = m_parent.GetPID()+1-(m_parent.GetPID()%2)*2;
-					msg.rtc.lfid               = family.corr_fid;
-					msg.rtc.tid                = tid; 
-				
-					if (!m_network.SendMessage(msg))
-					{
-						DeadlockWrite("Unable to send rthreadCount, m_cleanup");
-						return FAILED;
-					}
-				
-				}	
+			    COMMIT{ thread.cleanupFlag = 1; }
+			    DebugSimWrite("F%u/T%u(%llu) is pushed in to m_cleanup again",(unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
+			    return SUCCESS;
 			}
+			else
+			{
+			    DebugSimWrite("F%u/T%u(%llu) can not be pushed in to m_cleanup again",(unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
+			    return FAILED;
+			}
+		    }   
+		    else
+		    {
+			COMMIT 
+			{
+			    family.rthreadCount--;
+			    thread.cleanupFlag = 0; 
+			}
+			
+			RemoteMessage msg;
+			msg.type                   = RemoteMessage::MSG_MASTERTID;
+			msg.mtid.pid               = m_parent.GetPID()+1-(m_parent.GetPID()%2)*2;
+			msg.mtid.lfid              = family.corr_fid;
+			msg.mtid.tid               = tid;
+			msg.mtid.index             = family.start;
+			
+			if (!m_network.SendMessage(msg))
+			{
+			    DeadlockWrite("Unable to send masterTID, m_cleanup");
+			    return FAILED;
+			}
+		    }
+		}
+		else //redundant family
+		{
+		    //send message to make 'threadCount' in master family increment 
+		    RemoteMessage msg;
+		    msg.type                   = RemoteMessage::MSG_RTHREADCOUNT;
+		    msg.rtc.pid                = m_parent.GetPID()+1-(m_parent.GetPID()%2)*2;
+		    msg.rtc.lfid               = family.corr_fid;
+		    msg.rtc.tid                = tid; 
+		    
+		    if (!m_network.SendMessage(msg))
+		    {
+			DeadlockWrite("Unable to send rthreadCount, m_cleanup");
+			return FAILED;
+		    }	
+		}	
+		
+	    }
             //FT-END
 
-			if (!AllocateThread(fid, tid, false))
-			{
-				DeadlockWrite("F%u/T%u unable to reactivate",
-							(unsigned)fid, (unsigned)tid);
-				return FAILED;
-			}
+	    if (!AllocateThread(fid, tid, false))
+	    {
+		DeadlockWrite("F%u/T%u unable to reactivate",
+			    (unsigned)fid, (unsigned)tid);
+		return FAILED;
+	    }
 		
         }
-
 
         return SUCCESS;
 
