@@ -246,6 +246,15 @@ struct LinkMessage
     std::string str() const;
 };
 
+struct PairInfo
+{
+    LFID     mlfid;
+    PID      pid;
+    RegIndex reg;
+    Integer	 first_fid;
+    LFID	 next_rlfid;
+};
+
 /// Allocation response (going backwards)
 struct AllocResponse
 {
@@ -392,6 +401,7 @@ private:
     bool OnDetach(LFID fid);
     bool OnBreak(LFID fid);
     bool OnSync(LFID fid, PID completion_pid, RegIndex completion_reg);
+    bool OnPair(LFID mlfid, PID completion_pid, RegIndex completion_reg, Integer first_fid, LFID next_rlfid);
 
     // Processes
     Result DoLink();
@@ -400,6 +410,7 @@ private:
     Result DoDelegationIn();
     Result DoSyncs();
     //FT-BEGIN
+    Result DoPair();
     Result DorLink();
     Result DorAllocResponse();
     //FT-END
@@ -436,6 +447,7 @@ public:
     // We need this buffer to break the circular depedency between the
     // link and delegation network.
     Buffer<SyncInfo> m_syncs;
+    Buffer<PairInfo> m_pair;
 
     // Processes
     Process p_DelegationOut;
@@ -449,6 +461,7 @@ public:
     //FT-END
 
     Process p_Syncs;
+    Process p_Pair;
 };
 
 #endif

@@ -50,6 +50,7 @@ Processor::Network::Network(
 //FT-END
 #undef CONTRUCT_REGISTER
     m_syncs ("b_syncs", *this, clock, familyTable.GetNumFamilies(), 3 ),
+    m_pair  ("b_pair",  *this, clock, familyTable.GetNumFamilies(), 3 ),
 
     p_DelegationOut(*this, "delegation-out", delegate::create<Network, &Processor::Network::DoDelegationOut>(*this)),
     p_DelegationIn (*this, "delegation-in",  delegate::create<Network, &Processor::Network::DoDelegationIn >(*this)),
@@ -59,7 +60,8 @@ Processor::Network::Network(
     p_rLink         (*this, "rlink",           delegate::create<Network, &Processor::Network::DorLink         >(*this)),
     p_rAllocResponse(*this, "ralloc-response", delegate::create<Network, &Processor::Network::DorAllocResponse>(*this)),
 //FT-END
-    p_Syncs        (*this, "syncs",          delegate::create<Network, &Processor::Network::DoSyncs        >(*this))
+    p_Syncs        (*this, "syncs",          delegate::create<Network, &Processor::Network::DoSyncs        >(*this)),
+    p_Pair         (*this, "pair",           delegate::create<Network, &Processor::Network::DoPair         >(*this))
 {
     RegisterSampleVariableInObject(m_numAllocates, SVC_CUMULATIVE);
     RegisterSampleVariableInObject(m_numBundles, SVC_CUMULATIVE);
@@ -70,6 +72,7 @@ Processor::Network::Network(
 
     m_link.in.Sensitive(p_Link);
     m_syncs.Sensitive(p_Syncs);
+    m_pair.Sensitive(p_Pair);
 
     //FT-BEGIN
     m_rlink.in.Sensitive(p_rLink);
@@ -262,6 +265,50 @@ bool Processor::Network::SendSync(const SyncInfo& sync)
         return false;
     }
     return true;
+}
+
+Result Processor::Network::DoPair()
+{
+    assert(!m_pair.Empty());
+    const PairInfo& info = m_pair.Front();
+
+    Family& family  = m_familyTable[info.mlfid];
+
+    if(family.link == INVALID_LFID) //the last core
+    {
+	RemoteMessage response;
+	response.type                        = RemoteMessage::MSG_RAW_REGISTER;
+	response.rawreg.pid                  = info.pid;
+	response.rawreg.addr                 = MAKE_REGADDR(RT_INTEGER, info.reg);
+	response.rawreg.value.m_state        = RST_FULL;
+	response.rawreg.value.m_integer      = info.first_fid;
+
+	if (!SendMessage(response))
+	{
+	    DeadlockWrite("Unable to buffer outgoing remote register response to Core %u, MSG_PAIR", (unsigned)response.rawreg.pid);
+	    return FAILED;
+	}
+    }
+    else //send link message to next core
+    {
+	LinkMessage fwd;
+	fwd.type                  = LinkMessage::MSG_PAIR;
+	fwd.pair.mlfid            = family.link;
+	fwd.pair.rlfid            = info.next_rlfid;
+	fwd.pair.completion_pid   = info.pid;
+	fwd.pair.completion_reg   = info.reg;
+	fwd.pair.first_fid        = info.first_fid;
+	fwd.redundant		  = family.redundant;
+
+	if (!SendMessage(fwd))
+	{
+	    DeadlockWrite("Unable to send link message, MSG_PAIR");
+	    return FAILED;
+	}
+    }
+    
+    m_pair.Pop();
+    return SUCCESS;
 }
 
 Result Processor::Network::DoSyncs()
@@ -586,7 +633,26 @@ bool Processor::Network::WriteRegister(LFID fid, RemoteRegType kind, const RegAd
     return true;
 }
 
+bool Processor::Network::OnPair(LFID mlfid, PID completion_pid, RegIndex completion_reg, Integer first_fid, LFID next_rlfid)
+{
+    PairInfo info;
+    info.mlfid			= mlfid;
+    info.pid			= completion_pid;
+    info.reg			= completion_reg;
+    info.first_fid		= first_fid;
+    info.next_rlfid		= next_rlfid;
 
+    if (!m_pair.Push(info))
+    {
+        // This shouldn't happen; the buffer should be large enough
+        // to accomodate all family events (family table size).
+	// the same as m_syncs.
+        assert(false);
+        return false;
+    }
+    return true;
+}
+	
 bool Processor::Network::OnSync(LFID fid, PID completion_pid, RegIndex completion_reg)
 {
     Family& family = m_familyTable[fid];
@@ -977,43 +1043,15 @@ Result Processor::Network::DoDelegationIn()
     {
         //the first core
         Family& family = m_allocator.GetFamilyChecked(msg.pair.mfid.lfid, msg.pair.mfid.capability);
-
-        COMMIT{family.corr_fid = msg.pair.rfid.lfid;}
-
-        if(family.link == INVALID_LFID) //the last core
+		
+	COMMIT{ family.corr_fid = msg.pair.rfid.lfid; }
+		
+	if (!OnPair(msg.pair.mfid.lfid, msg.pair.completion_pid, msg.pair.completion_reg, m_parent.PackFID(msg.pair.mfid), msg.pair.rfid.lfid))
         {
-            RemoteMessage response;
-            response.type                        = RemoteMessage::MSG_RAW_REGISTER;
-            response.rawreg.pid                  = msg.pair.completion_pid;
-            response.rawreg.addr                 = MAKE_REGADDR(RT_INTEGER, msg.pair.completion_reg);
-            response.rawreg.value.m_state        = RST_FULL;
-            response.rawreg.value.m_integer      = m_parent.PackFID(msg.pair.mfid);
-
-            if (!SendMessage(response))
-            {
-                DeadlockWrite("Unable to buffer outgoing remote register response to Core %u, RMT_MSG_PAIR", (unsigned)response.rawreg.pid);
-                return FAILED;
-            }
+            DeadlockWrite("Unable to call OnPair in DodelegationIn.");
+	    return FAILED;
         }
-        else //send link message to next core
-        {
-            LinkMessage fwd;
-            fwd.type                  = LinkMessage::MSG_PAIR;
-            fwd.pair.mlfid            = family.link;
-            fwd.pair.rlfid            = msg.pair.rfid.lfid;
-            fwd.pair.completion_pid   = msg.pair.completion_pid;
-            fwd.pair.completion_reg   = msg.pair.completion_reg;
-            fwd.pair.first_fid        = m_parent.PackFID(msg.pair.mfid);
-
-            fwd.redundant    = family.redundant;
-
-            if (!SendMessage(fwd))
-            {
-                DeadlockWrite("Unable to send link message, RMT_MSG_PAIR");
-                return FAILED;
-            }
-        }
-
+		
     }
 	break;
 	
@@ -1218,55 +1256,21 @@ Result Processor::Network::DoLink()
     //FT-BEGIN
     case LinkMessage::MSG_PAIR:
     {
-        Family& family  = m_familyTable[msg.pair.mlfid];
+	Family& family  = m_familyTable[msg.pair.mlfid];
         Family& rfamily = m_familyTable[msg.pair.rlfid];
-
+		
         bool flag = m_parent.GetPID() % 2;
-
-        COMMIT
+		
+        COMMIT{ family.corr_fid = flag ? rfamily.link : msg.pair.rlfid; }
+	LFID next_rlfid = flag ? rfamily.nlink : msg.pair.rlfid;
+		
+        if (!OnPair(msg.pair.mlfid, msg.pair.completion_pid, msg.pair.completion_reg, msg.pair.first_fid, next_rlfid))
         {
-            family.corr_fid = flag ? rfamily.link : msg.pair.rlfid;
+            DeadlockWrite("Unable to call OnPair in DoLink.");
+	    return FAILED;
         }
-
-
-        if(family.link == INVALID_LFID) //the last core
-        {
-            RemoteMessage response;
-            response.type                        = RemoteMessage::MSG_RAW_REGISTER;
-            response.rawreg.pid                  = msg.pair.completion_pid;
-            response.rawreg.addr                 = MAKE_REGADDR(RT_INTEGER, msg.pair.completion_reg);
-            response.rawreg.value.m_state        = RST_FULL;
-            response.rawreg.value.m_integer      = msg.pair.first_fid;
-
-            if (!SendMessage(response))
-            {
-                DeadlockWrite("Unable to buffer outgoing remote register response, LINK_MSG_PAIR");
-                return FAILED;
-            }
-        }
-        else //send link message to next core
-        {
-            LinkMessage fwd;
-            fwd.type                  = LinkMessage::MSG_PAIR;
-            fwd.pair.mlfid            = family.link;
-
-            fwd.pair.rlfid            = flag ? rfamily.nlink : msg.pair.rlfid;
-
-            fwd.pair.completion_pid   = msg.pair.completion_pid;
-            fwd.pair.completion_reg   = msg.pair.completion_reg;
-            fwd.pair.first_fid        = msg.pair.first_fid;
-
-            fwd.redundant    = msg.redundant;
-
-            if (!SendMessage(fwd))
-            {
-                DeadlockWrite("Unable to send link message, LINK_MSG_PAIR");
-                return FAILED;
-            }
-        }
-
     }
-    break;
+	break;
     //FT-END
 
     default:
@@ -1466,52 +1470,21 @@ Result Processor::Network::DorLink()
 
     case LinkMessage::MSG_PAIR:
     {
-        Family& family  = m_familyTable[msg.pair.mlfid];
+	Family& family  = m_familyTable[msg.pair.mlfid];
         Family& rfamily = m_familyTable[msg.pair.rlfid];
-
+		
         bool flag = m_parent.GetPID()%2;
-
+		
         COMMIT{family.corr_fid = flag ? msg.pair.rlfid : rfamily.link;}
-
-
-        if(family.link == INVALID_LFID) //the last core
+	LFID next_rlfid = flag ? msg.pair.rlfid : rfamily.nlink;
+		
+	if (!OnPair(msg.pair.mlfid, msg.pair.completion_pid, msg.pair.completion_reg, msg.pair.first_fid, next_rlfid))
         {
-            RemoteMessage response;
-            response.type                        = RemoteMessage::MSG_RAW_REGISTER;
-            response.rawreg.pid                  = msg.pair.completion_pid;
-            response.rawreg.addr                 = MAKE_REGADDR(RT_INTEGER, msg.pair.completion_reg);
-            response.rawreg.value.m_state        = RST_FULL;
-            response.rawreg.value.m_integer      = msg.pair.first_fid;
-
-            if (!SendMessage(response))
-            {
-                DeadlockWrite("Unable to buffer outgoing remote register response, LINK_MSG_PAIR");
-                return FAILED;
-            }
+            DeadlockWrite("Unable to call OnPair in DorLink.");
+	    return FAILED;
         }
-        else //send link message to next core
-        {
-            LinkMessage fwd;
-            fwd.type                  = LinkMessage::MSG_PAIR;
-            fwd.pair.mlfid            = family.link;
-
-            fwd.pair.rlfid            = flag ? msg.pair.rlfid : rfamily.nlink;
-
-            fwd.pair.completion_pid   = msg.pair.completion_pid;
-            fwd.pair.completion_reg   = msg.pair.completion_reg;
-            fwd.pair.first_fid        = msg.pair.first_fid;
-
-            fwd.redundant    = msg.redundant;
-
-            if (!SendMessage(fwd))
-            {
-                DeadlockWrite("Unable to send link message, LINK_MSG_PAIR");
-                return FAILED;
-            }
-        }
-
     }
-    break;
+	break;
 
     default:
         assert(false);

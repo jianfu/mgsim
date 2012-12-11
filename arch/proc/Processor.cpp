@@ -195,12 +195,14 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
     m_network.m_link.out.AddProcess(m_allocator.p_FamilyCreate);            // Create process sends place-wide create
     m_network.m_link.out.AddProcess(m_allocator.p_ThreadAllocate);          // Thread cleanup causes sync
     //FT-BEGIN
+    m_network.m_link.out.AddProcess(m_network.p_Pair);  
     m_network.m_rlink.out.AddProcess(m_network.p_rLink);                      
     m_network.m_rlink.out.AddProcess(m_network.p_DelegationIn);              
     m_network.m_rlink.out.AddProcess(m_dcache.p_CompletedReads);            
     m_network.m_rlink.out.AddProcess(m_allocator.p_FamilyAllocate);        
     m_network.m_rlink.out.AddProcess(m_allocator.p_FamilyCreate);            
-    m_network.m_rlink.out.AddProcess(m_allocator.p_ThreadAllocate);          
+    m_network.m_rlink.out.AddProcess(m_allocator.p_ThreadAllocate);
+    m_network.m_rlink.out.AddProcess(m_network.p_Pair);
     //FT-END
 
 
@@ -225,7 +227,7 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
         m_network.m_delegateIn.AddProcess(m_grid[i]->m_network.p_DelegationOut);
     }
     m_network.m_delegateIn.AddProcess(m_network.p_Syncs);             // Family sync goes to delegation
-
+    m_network.m_delegateIn.AddProcess(m_network.p_Pair);
     m_network.m_delegateOut.AddProcess(m_pipeline.p_Pipeline);        // Sending or requesting registers
     m_network.m_delegateOut.AddProcess(m_network.p_DelegationIn);     // Returning registers
     m_network.m_delegateOut.AddProcess(m_network.p_Link);             // Place sync causes final sync
@@ -245,7 +247,8 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
     m_network.m_delegateOut.AddProcess(m_allocator.p_FamilyCreate);   // Create process sends delegated create
     m_network.m_delegateOut.AddProcess(m_allocator.p_ThreadAllocate); // Thread cleanup caused sync
     m_network.m_delegateOut.AddProcess(m_network.p_Syncs);            // Family sync goes to delegation
-
+    m_network.m_delegateOut.AddProcess(m_network.p_Pair);    
+	
     //
     // Set possible storage accesses per process.
     //
@@ -278,7 +281,7 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
         /* FT */                         opt(m_network.m_delegateOut * m_network.m_rlink.out * m_allocator.m_readyThreads2) ^
         /* FT */                         opt(m_network.m_delegateOut * m_network.m_link.out * m_allocator.m_readyThreads2)  ^
         /* FT */                         opt(m_allocator.m_rcleanup * m_allocator.m_cleanup) ^
-		/* FT */ 						 opt(m_allocator.m_cleanup * m_allocator.m_cleanup));
+	/* FT */ 			 opt(m_allocator.m_cleanup * m_allocator.m_cleanup));
 
     m_allocator.p_FamilyAllocate.SetStorageTraces(
         m_network.m_allocResponse.out ^ 
@@ -299,8 +302,7 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
         /* CREATE_NOTIFY */                 opt(DELEGATE) );
 
     m_allocator.p_ThreadActivation.SetStorageTraces(
-        opt(m_allocator.m_activeThreads ^ m_icache.m_outgoing 
-			^ m_allocator.m_readyThreads3 /*[FT]*/));
+        opt(m_allocator.m_activeThreads ^ m_icache.m_outgoing ^ m_allocator.m_readyThreads3 /*[FT]*/));
 
     m_allocator.p_Bundle.SetStorageTraces( m_dcache.m_outgoing ^ DELEGATE );
 
@@ -372,7 +374,8 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
         /* RRT_LAST_SHARED */       (DELEGATE) ^
         /* RRT_FIRST_DEPENDENT */   (m_allocator.m_readyThreads2) ^
         /* RRT_GLOBAL */            (m_allocator.m_readyThreads2 * opt(m_network.m_link.out ^ m_network.m_rlink.out /*[FT]*/)) ^
-	/* MSG_RTHREADDONE */       (opt(m_allocator.m_rcleanup) * m_allocator.m_cleanup) /*[FT]*/
+	/* MSG_RTHREADDONE */       (opt(m_allocator.m_rcleanup) * m_allocator.m_cleanup) /*[FT]*/ ^
+				     opt(m_network.m_pair) /*[FT]*/
         );
 
     m_network.p_Link.SetStorageTraces(
@@ -385,7 +388,8 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
         /* MSG_SYNC */              opt(m_network.m_link.out ^ m_network.m_syncs) ^
         /* MSG_DETACH */            opt(m_network.m_link.out) ^
         /* MSG_GLOBAL */            (m_allocator.m_readyThreads2 * opt(m_network.m_link.out)) ^
-        /* MSG_BREAK */             (opt(m_network.m_link.out ^ m_network.m_syncs) * opt(m_network.m_link.out))
+        /* MSG_BREAK */             (opt(m_network.m_link.out ^ m_network.m_syncs) * opt(m_network.m_link.out)) ^
+				     opt(m_network.m_pair) /*[FT]*/
         );
 
     //FT-BEGIN
@@ -399,7 +403,8 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
         /* MSG_SYNC */              opt(m_network.m_rlink.out ^ m_network.m_syncs) ^
         /* MSG_DETACH */            opt(m_network.m_rlink.out) ^
         /* MSG_GLOBAL */            (m_allocator.m_readyThreads2 * opt(m_network.m_rlink.out)) ^
-        /* MSG_BREAK */             (opt(m_network.m_rlink.out ^ m_network.m_syncs) * opt(m_network.m_rlink.out))
+        /* MSG_BREAK */             (opt(m_network.m_rlink.out ^ m_network.m_syncs) * opt(m_network.m_rlink.out)) ^
+				     opt(m_network.m_pair) /*[FT]*/
         );
     //FT-END
 
@@ -413,6 +418,8 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
 
     m_network.p_Syncs.SetStorageTraces(
         DELEGATE );
+	m_network.p_Pair.SetStorageTraces(
+        DELEGATE ^ m_network.m_rlink.out ^ m_network.m_link.out);
 
     // This core can send a message to every other core.
     // (Except itself, that goes straight into m_delegationIn).
