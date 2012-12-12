@@ -71,6 +71,12 @@ public:
         Integer   parameter;      ///< Parameter for shareds
         RegIndex  completion_reg; ///< Register (on that core) that will receive the FID
     };
+	
+    struct RmtwrInfo
+    {
+	TID	tid;
+	FID     fid;
+    };
 
     enum BundleState
     {
@@ -132,6 +138,7 @@ public:
     //FT-BEGIN
     bool FindReadyThread(LFID fid, TID mtid, uint64_t index);
     bool SetRegIndex(TID tid, RegIndex index);
+    bool SendRmtwr(TID tid, FID fid);
     //FT-END
 
     // Helpers
@@ -187,11 +194,12 @@ private:
     Buffer<CreateInfo>    m_creates;                 ///< Create queue
     Buffer<TID>           m_cleanup;                 ///< Cleanup queue
     Buffer<TID>           m_rcleanup;                ///< Redundant thread cleanup queue, all the rthread should send a msg to master
+    Buffer<RmtwrInfo>     m_rmtwr;
     CreateState           m_createState;	         ///< State of the current state;
     CID                   m_createLine;	   	         ///< Cache line that holds the register info
     ThreadList            m_readyThreads1;           ///< Queue of the threads can be activated; from the pipeline
     ThreadList            m_readyThreads2;           ///< Queue of the threads can be activated; from the rest
-	ThreadList            m_readyThreads3;           ///< [FT] Queue of the redundant thread, which does not have mtid
+    ThreadList            m_readyThreads3;           ///< [FT] Queue of the redundant thread, which does not have mtid
     ThreadList*           m_prevReadyList;           ///< Which ready list was used last cycle. For round-robin prioritization.
 
     // The family allocation request queues
@@ -208,6 +216,7 @@ private:
     Result DoThreadActivation();
     Result DoBundle();
     Result DoRThreadNotify();
+    Result DoRmtwr();
 
     // Statistics
     CycleNo    m_lastcycle;
@@ -226,6 +235,7 @@ public:
     Process p_ThreadActivation;
     Process p_Bundle;
     Process p_RThreadNotify;
+    Process p_DoRmtwr;
 
     ArbitratedService<>   p_allocation;     ///< Arbitrator for FamilyTable::AllocateFamily
     ArbitratedService<>   p_alloc;          ///< Arbitrator for m_alloc

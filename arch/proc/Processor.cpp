@@ -126,7 +126,6 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
     m_allocator.p_alloc.AddProcess(m_allocator.p_FamilyCreate);         // Local creates
 
 
-
     if (m_io_if != NULL)
     {
         IONotificationMultiplexer &nmux = m_io_if->GetNotificationMultiplexer();
@@ -208,7 +207,7 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
 
     m_network.m_delegateIn.AddProcess(m_network.p_Link);                    // Link messages causes remote
     //FT-BEGIN
-    m_network.m_delegateIn.AddProcess(m_network.p_rLink);                   
+    m_network.m_delegateIn.AddProcess(m_network.p_rLink);
     //FT-END
     m_network.m_delegateIn.AddProcess(m_dcache.p_CompletedReads);           // Read completion causes sync
 
@@ -241,6 +240,7 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
     m_network.m_delegateOut.AddProcess(m_network.p_AllocResponse);    // Allocate response writing back to parent
     //FT-BEGIN
     m_network.m_delegateOut.AddProcess(m_network.p_rAllocResponse);   // Allocate response writing back to parent
+    m_network.m_delegateOut.AddProcess(m_allocator.p_DoRmtwr);
     //FT-END
     m_network.m_delegateOut.AddProcess(m_allocator.p_FamilyAllocate); // Allocation process sends FID
     m_network.m_delegateOut.AddProcess(m_allocator.p_Bundle);         // Indirect creation sends bundle info
@@ -307,6 +307,8 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
     m_allocator.p_Bundle.SetStorageTraces( m_dcache.m_outgoing ^ DELEGATE );
 
     m_allocator.p_RThreadNotify.SetStorageTraces( m_network.m_delegateOut );
+    m_allocator.p_DoRmtwr.SetStorageTraces( opt(m_allocator.m_rmtwr) ^
+					    opt(m_network.m_delegateOut));
 	
     m_icache.p_Incoming.SetStorageTraces(
         opt(m_allocator.m_activeThreads) );
@@ -324,15 +326,19 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
     // m_dcache.p_Outgoing is set in the memory
 
     StorageTraceSet pls_writeback =
+		opt(m_allocator.m_rmtwr) *
         opt(DELEGATE) *
         opt(m_allocator.m_bundle ^ /* FIXME: is the bundle creation buffer really involved here? */
-            (m_allocator.m_readyThreads1 * m_allocator.m_cleanup) ^
-			(m_allocator.m_readyThreads1 * m_allocator.m_rcleanup * m_allocator.m_cleanup) ^ /*[FT]*/
+            m_allocator.m_rmtwr  ^
+			(m_allocator.m_readyThreads1 * m_allocator.m_cleanup) ^
+	    (m_allocator.m_readyThreads1 * m_allocator.m_rmtwr) ^ 
+	    (m_allocator.m_readyThreads1 * m_allocator.m_rcleanup * m_allocator.m_cleanup) ^ /*[FT]*/
             m_allocator.m_cleanup ^
 	    (m_allocator.m_rcleanup * m_allocator.m_cleanup) ^ /*[FT]*/
             m_allocator.m_readyThreads1);
+   
     StorageTraceSet pls_memory =
-        m_dcache.m_outgoing;
+        m_dcache.m_outgoing * opt(m_allocator.m_rmtwr);
 
     if (m_io_if != NULL)
     {

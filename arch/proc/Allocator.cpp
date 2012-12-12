@@ -1707,20 +1707,75 @@ bool Processor::Allocator::QueueCreate(const LinkMessage& msg)
 }
 
 //FT-BEGIN
-bool Processor::Allocator::SetRegIndex(TID tid, RegIndex index)
+bool Processor::Allocator::SendRmtwr(TID tid, FID fid)
 {
-    if (tid == INVALID_TID)
-        return false;
-    else
+    RmtwrInfo info;
+    info.tid = tid;
+    info.fid = fid;
+
+    if (!m_rmtwr.Push(info))
     {
-	COMMIT
-	{
-            Thread& thread  = m_threadTable[tid];
-            thread.regIndex = index;
-	}
+        // This shouldn't happen; the buffer should be large enough
+        // to accomodate all thread events (thread table size).
+        assert(false);
+        return false;
     }
     return true;
-    
+}
+
+Result Processor::Allocator::DoRmtwr()
+{
+    //if RegIndex come later than rmtwr,
+    //it means that the instr. rmtwr is buffered in m_rmtwr,
+    //we need sent the rfid to redundant thread.
+    assert(!m_rmtwr.Empty());
+    const RmtwrInfo& info = m_rmtwr.Front();
+    const Thread& thread = m_threadTable[info.tid];
+	
+    m_rmtwr.Pop();
+	
+    if (thread.regIndex != INVALID_REG_INDEX)
+    {
+	RemoteMessage msg;
+	msg.type                    = RemoteMessage::MSG_RAW_REGISTER;
+	msg.rawreg.pid              = m_parent.GetPID()+1-(m_parent.GetPID()%2)*2;
+	msg.rawreg.addr             = MAKE_REGADDR(RT_INTEGER, thread.regIndex);
+	msg.rawreg.value.m_state    = RST_FULL;
+	msg.rawreg.value.m_integer  = m_parent.PackFID(info.fid);
+
+	if (!m_network.SendMessage(msg))
+	{
+	    DeadlockWrite("Unable to send rmtwr to CPU%u", (unsigned)msg.rawreg.pid);
+	    return FAILED;
+	}
+    }
+    else
+    {
+    	assert(thread.regIndex == INVALID_REG_INDEX);
+
+	if (!m_rmtwr.Push(info))
+	{
+	    // This shouldn't happen; the buffer should be large enough
+	    // to accomodate all thread events (thread table size).
+	    assert(false);
+	    return FAILED;
+	}
+    }
+
+    return SUCCESS;
+}
+
+bool Processor::Allocator::SetRegIndex(TID tid, RegIndex index)
+{
+    assert(tid != INVALID_TID);
+	
+    COMMIT
+    {
+	Thread& thread  = m_threadTable[tid];
+        thread.regIndex = index;
+    }
+
+    return true;  
 }
 //FT-END
 
@@ -2474,11 +2529,12 @@ Processor::Allocator::Allocator(const string& name, Processor& parent, Clock& cl
     m_creates       ("b_creates",        *this, clock, config.getValueOrDefault<BufferSize>(*this, "CreateQueueSize", familyTable.GetNumFamilies()), 3),
     m_cleanup       ("b_cleanup",        *this, clock, config.getValueOrDefault<BufferSize>(*this, "ThreadCleanupQueueSize", threadTable.GetNumThreads()), 4),
     m_rcleanup      ("b_rcleanup",       *this, clock, config.getValueOrDefault<BufferSize>(*this, "RThreadCleanupQueueSize", threadTable.GetNumThreads()), 4),
+    m_rmtwr         ("b_rmtwr",          *this, clock, threadTable.GetNumThreads(), 3 ),
     m_createState   (CREATE_INITIAL),
     m_createLine    (0),
     m_readyThreads1 ("q_readyThreads1", *this, clock, threadTable),
     m_readyThreads2 ("q_readyThreads2", *this, clock, threadTable),
-	m_readyThreads3 ("q_readyThreads3", *this, clock, threadTable), //[FT]
+    m_readyThreads3 ("q_readyThreads3", *this, clock, threadTable), //[FT]
     m_prevReadyList (NULL),
 
     m_allocRequestsSuspend  ("b_allocRequestsSuspend",   *this, clock, config.getValue<BufferSize>(*this, "FamilyAllocationSuspendQueueSize")),
@@ -2497,6 +2553,7 @@ Processor::Allocator::Allocator(const string& name, Processor& parent, Clock& cl
     p_ThreadActivation(*this, "thread-activation", delegate::create<Allocator, &Processor::Allocator::DoThreadActivation>(*this) ),
     p_Bundle          (*this, "bundle-Create",     delegate::create<Allocator, &Processor::Allocator::DoBundle          >(*this) ),
     p_RThreadNotify   (*this, "rthread-notify",    delegate::create<Allocator, &Processor::Allocator::DoRThreadNotify   >(*this) ),
+    p_DoRmtwr         (*this, "do-rmtwr",          delegate::create<Allocator, &Processor::Allocator::DoRmtwr           >(*this) ),
     
     p_allocation    (*this, clock, "p_allocation"),
     p_alloc         (*this, clock, "p_alloc"),
@@ -2509,7 +2566,7 @@ Processor::Allocator::Allocator(const string& name, Processor& parent, Clock& cl
     m_cleanup       .Sensitive(p_ThreadAllocate);
     m_readyThreads1 .Sensitive(p_ThreadActivation);
     m_readyThreads2 .Sensitive(p_ThreadActivation);
-	m_readyThreads3 .Sensitive(p_ThreadActivation); //[FT]
+    m_readyThreads3 .Sensitive(p_ThreadActivation); //[FT]
     m_activeThreads .Sensitive(pipeline.p_Pipeline); // Fetch Stage is sensitive on this list
 
     m_allocRequestsSuspend  .Sensitive(p_FamilyAllocate);
@@ -2517,6 +2574,7 @@ Processor::Allocator::Allocator(const string& name, Processor& parent, Clock& cl
     m_allocRequestsExclusive.Sensitive(p_FamilyAllocate);
     m_bundle                .Sensitive(p_Bundle);
     m_rcleanup              .Sensitive(p_RThreadNotify);
+    m_rmtwr                 .Sensitive(p_DoRmtwr);
 
     std::fill(m_numThreadsPerState, m_numThreadsPerState+TST_NUMSTATES, 0);
 
