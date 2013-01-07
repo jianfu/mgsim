@@ -7,6 +7,8 @@ MEMORY_SRC = \
 	arch/mem/SerialMemory.h \
         arch/mem/DDRMemory.cpp \
         arch/mem/DDRMemory.h \
+	arch/mem/ESAMemory.cpp \
+	arch/mem/ESAMemory.h \
         arch/mem/DDR.cpp \
         arch/mem/DDR.h
 
