@@ -364,11 +364,26 @@ bool BankedMemory::Write(MCID id, MemAddr address, const MemData& data, WClientI
     }
 
     // Broadcast the snoop data
+    /*
     for (std::vector<ClientInfo>::iterator p = m_clients.begin(); p != m_clients.end(); ++p)
     {
         if (!p->callback->OnMemorySnooped(request.address, request.data.data, request.data.mask))
         {
             return false;
+        }
+    }
+    */
+	
+    for (size_t i = 0; i < m_clients.size(); ++i)
+    {
+        ClientInfo* client = &m_clients[i];
+        if (client->callback != NULL && i != id)
+        {
+            if (!client->callback->OnMemorySnooped(request.address, request.data.data, request.data.mask))
+            {
+                DeadlockWrite("Unable to snoop data to cache clients, BankedMemory");
+                return false;
+            }
         }
     }
 

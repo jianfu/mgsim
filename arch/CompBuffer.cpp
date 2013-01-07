@@ -251,6 +251,14 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
                     }
                     temp_client     = templine.client;
                     temp_wid        = templine.wid;
+		    
+		    //snoop back to L1 itself
+		    if (!m_clients[real_mcid]->OnMemorySnooped(address, data.data, data.mask))
+		    {
+			DeadlockWrite("Unable to snoop update to cache clients, CB comparison success");
+			return FAILED;		
+		    }
+					
                     DebugMemWrite("Write to m_outgoing from cb%u: %#016llx, Comparison success!", (unsigned)m_mcid, (unsigned long long)address);
                 }
                 else 
@@ -541,7 +549,7 @@ void CompBuffer::Cmd_Read(std::ostream& out, const std::vector<std::string>& arg
         int i = 0;
         for (request_buffer::const_iterator p = (*compBuffer)[mtid].begin(); p != (*compBuffer)[mtid].end(); ++p)
         {
-            out << mtid << dec;
+            out << hex << mtid;
             out << "      |"
                 << setw(6) << setfill(' ') << left << i << dec << "|"
                 << hex << "0x" << setw(16) << setfill('0') << p->address << "   |";
