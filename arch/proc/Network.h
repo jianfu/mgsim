@@ -175,6 +175,7 @@ struct LinkMessage
             RegIndex completion_reg; ///< Reg on parent_pid of the completion register
             bool     exact;          ///< Allocate exactly 'size' cores
             bool     suspend;        ///< Suspend until we get a context (only if exact)
+	    bool     ftmode;
         } allocate;
 
         struct

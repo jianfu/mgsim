@@ -257,7 +257,7 @@ bool Processor::Allocator::RescheduleThread(TID tid, MemAddr pc)
 
     // The thread can be added to the ready queue
     ThreadQueue tq = {tid, tid};
-	assert (tid != INVALID_TID);
+    assert (tid != INVALID_TID);
     if (!ActivateThreads(tq))
     {
         DeadlockWrite("F%u/T%u unable to reschedule", (unsigned)thread.family, (unsigned)tid);
@@ -373,13 +373,13 @@ bool Processor::Allocator::AllocateThread(LFID fid, TID tid, bool isNewlyAllocat
     {
         // Reserve the memory (commits on use)
         //redundant thread will not reserve TLS
-		//mater thread and thread which is not in FT mode can reserve TLS 
-		if (family->redundant == 0) 
-		{
-			const MemAddr tls_base = m_parent.GetTLSAddress(fid, tid);
-			const MemSize tls_size = m_parent.GetTLSSize();
-			m_parent.MapMemory(tls_base+tls_size/2, tls_size/2);
-		}
+	//mater thread and thread which is not in FT mode can reserve TLS 
+	if (family->redundant == 0) 
+	{
+	    const MemAddr tls_base = m_parent.GetTLSAddress(fid, tid);
+	    const MemSize tls_size = m_parent.GetTLSSize();
+	    m_parent.MapMemory(tls_base+tls_size/2, tls_size/2);
+	}
     }
 
     SInteger logical_index = family->start;
@@ -622,7 +622,7 @@ bool Processor::Allocator::DecreaseThreadDependency(TID tid, ThreadDependency de
     case THREADDEP_OUTSTANDING_WRITES: deps->numPendingWrites--;   break;
     case THREADDEP_PREV_CLEANED_UP:    deps->prevCleanedUp = true; break;
     case THREADDEP_TERMINATED:         deps->killed        = true; break;
-    case THREADDEP_R_THREAD_DONE:	   deps->rThreadDone   = true; break;
+    case THREADDEP_R_THREAD_DONE:      deps->rThreadDone   = true; break;
     }
 
     switch (dep)
@@ -632,7 +632,7 @@ bool Processor::Allocator::DecreaseThreadDependency(TID tid, ThreadDependency de
         {
             // Wake up the thread that was waiting on it
             ThreadQueue tq = {tid, tid};
-			assert (tid != INVALID_TID);
+	    assert (tid != INVALID_TID);
             if (!ActivateThreads(tq))
             {
                 return false;
@@ -777,7 +777,7 @@ FCapability Processor::Allocator::InitializeFamily(LFID fid) const
         family.redundant     = false;
         family.corr_fid      = INVALID_LFID;
         family.rthreadCount  = 0;
-	family.ftmode	     = 1;  //start ft mode from __mt_main, except the initial family.
+	family.ftmode	     = 0;  
         //FT-END
 
         // Dependencies
@@ -1282,7 +1282,8 @@ bool Processor::Allocator::QueueFamilyAllocation(const LinkMessage& msg)
     request.binfo.parameter = 0;
     request.binfo.index     = 0;
     //FT-BEGIN
-    request.redundant      = msg.redundant;
+    request.redundant	    = msg.redundant;
+    request.ftmode	    = msg.allocate.ftmode;
     //FT-END
 
     Buffer<AllocRequest>& allocations = (msg.allocate.suspend ? m_allocRequestsSuspend : m_allocRequestsNoSuspend);
@@ -1396,41 +1397,9 @@ Result Processor::Allocator::DoFamilyAllocate()
         // We have the context
         COMMIT
         {
-            Family& family = m_familyTable[lfid];
-            family.redundant = req.redundant;
-			
-	    //This setting is only for __mt_main
-	    //__mt_main use NORMAL context
-	    //The other system init use ECLUSIVE, such as __slFfmta_sep_alloc
-	    if (!req.ftmode)  //The first InitialFamily
-	    {
-		if (type == CONTEXT_NORMAL)
-		{
-		    if (m_parent.GetPID() == 0) //master __mt_main
-		    {
-			family.redundant = 0;
-			family.corr_fid	 = 0;
-		    }
-		    else if (m_parent.GetPID() == 1) //redundant __mt_main
-		    {
-			family.redundant = 1;
-			family.corr_fid	 = 1;
-		    }
-		    else
-		    {
-			throw exceptf<SimulationException>(*this, "__mt_main's initialization is failed!");
-		    }
-		}
-		else if (type == CONTEXT_EXCLUSIVE)
-		{
-		    family.ftmode = 0;
-		}
-		else
-		{
-		    throw exceptf<SimulationException>(*this, "__slFfmta_sep_alloc's initialization is failed!");
-		}
-
-	    }
+            Family& family	= m_familyTable[lfid];
+            family.redundant	= req.redundant;
+	    family.ftmode	= req.ftmode;
         }
     }
     //FT-END
@@ -1614,7 +1583,8 @@ Result Processor::Allocator::DoFamilyAllocate()
         msg.allocate.completion_pid = req.completion_pid;
         msg.allocate.completion_reg = req.completion_reg;
         //FT-BEGIN
-        msg.redundant               =  req.redundant;
+        msg.redundant               = req.redundant;
+	msg.allocate.ftmode         = req.ftmode;
         //FT-END
 
         if (!m_network.SendMessage(msg))

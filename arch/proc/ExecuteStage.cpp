@@ -208,85 +208,130 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecAllocate(
     //FT-BEGIN
     const Family& family = m_familyTable[m_input.fid];
     const Thread& thread = m_threadTable[m_input.tid];
-
+    Integer start_flag = (flags >> 2) & 3;
     //!family.redundant &  redundant    --- send to 2nd core of place
     //!family.redundant & !redundant    --- normal
     // family.redundant &  redundant    --- nop
     // family.redundant & !redundant    --- pending Rc, send Rc's absolute address to master thread
 
-	if (family.ftmode)
+    if (family.ftmode)
+    {
+	if (!family.redundant)  //master thread
 	{
-		if (!family.redundant)  //master thread
-		{
-			if (redundant) //allocate/r
-				place.pid = place.pid+1-(place.pid%2)*2;
+	    if (redundant) //allocate/r
+		place.pid = place.pid+1-(place.pid%2)*2;
 
-			//printf("Master: C%u, F%u, T%u, R%u\n", (unsigned)m_parent.GetProcessor().GetPID(), (unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned)redundant);
-			//both allocate/r and allocate
+	    //printf("Master: C%u, F%u, T%u, R%u\n", (unsigned)m_parent.GetProcessor().GetPID(), (unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned)redundant);
+	    //both allocate/r and allocate
+	    //FT-END
+
+	    COMMIT
+	    {
+		m_output.Rrc.type = RemoteMessage::MSG_ALLOCATE;
+		m_output.Rrc.allocate.place          = place;
+		m_output.Rrc.allocate.suspend        = suspend;
+		m_output.Rrc.allocate.exclusive      = exclusive;
+		m_output.Rrc.allocate.type           = type;
+		m_output.Rrc.allocate.completion_pid = m_parent.GetProcessor().GetPID();
+		m_output.Rrc.allocate.completion_reg = reg;
+
+		//FT-BEGIN
+		m_output.Rrc.allocate.redundant	    = redundant;
+		m_output.Rrc.allocate.ftmode	    = family.ftmode;
 		//FT-END
 
+		m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
+	    }
+	}
+	//FT-BEGIN
+	else    //redundant thread
+	{
+	    if (!redundant)  //allocate
 		COMMIT
 		{
-			m_output.Rrc.type = RemoteMessage::MSG_ALLOCATE;
-			m_output.Rrc.allocate.place          = place;
-			m_output.Rrc.allocate.suspend        = suspend;
-			m_output.Rrc.allocate.exclusive      = exclusive;
-			m_output.Rrc.allocate.type           = type;
-			m_output.Rrc.allocate.completion_pid = m_parent.GetProcessor().GetPID();
-			m_output.Rrc.allocate.completion_reg = reg;
+		    m_output.Rrc.type           = RemoteMessage::MSG_ADDR_REGISTER;
+		    m_output.Rrc.addrreg.pid    = m_parent.GetProcessor().GetPID()+1-(m_parent.GetProcessor().GetPID()%2)*2;
+		    m_output.Rrc.addrreg.tid    = thread.mtid;
+		    m_output.Rrc.addrreg.index  = reg;
 
-				//FT-BEGIN
-				m_output.Rrc.allocate.redundant      = redundant;
-				m_output.Rrc.allocate.ftmode		 = family.ftmode;
-				//FT-END
-
-			m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
+		    m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
 		}
-		}
-		//FT-BEGIN
-		else                //redundant thread
-		{
-			if (!redundant)  //allocate
-				COMMIT
-				{
-					m_output.Rrc.type           = RemoteMessage::MSG_ADDR_REGISTER;
-					m_output.Rrc.addrreg.pid    = m_parent.GetProcessor().GetPID()+1-(m_parent.GetProcessor().GetPID()%2)*2;
-					m_output.Rrc.addrreg.tid    = thread.mtid;
-					m_output.Rrc.addrreg.index  = reg;
 
-					m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
-				}
-
-			//nop for allocate/r
-		}
-		//FT-END
+	    //nop for allocate/r
 	}
-	else
+	//FT-END
+    }
+    else
+    {
+	assert (family.ftmode == 0);
+	//only execute allocate instrucation;
+	//allocate/r will not be executed.
+	assert (redundant == 0);
+		
+	if (start_flag == 2) //start master thread
 	{
-		assert (family.ftmode == 0);
-		//only execute allocate instrucation;
-		//allocate/r will not be executed.
-		if (!redundant)
-		{
-			COMMIT
-			{
-				m_output.Rrc.type = RemoteMessage::MSG_ALLOCATE;
-				m_output.Rrc.allocate.place          = place;
-				m_output.Rrc.allocate.suspend        = suspend;
-				m_output.Rrc.allocate.exclusive      = exclusive;
-				m_output.Rrc.allocate.type           = type;
-				m_output.Rrc.allocate.completion_pid = m_parent.GetProcessor().GetPID();
-				m_output.Rrc.allocate.completion_reg = reg;
+	    COMMIT
+	    {
+		m_output.Rrc.type = RemoteMessage::MSG_ALLOCATE;
+		m_output.Rrc.allocate.place          = place;
+		m_output.Rrc.allocate.suspend        = suspend;
+		m_output.Rrc.allocate.exclusive      = exclusive;
+		m_output.Rrc.allocate.type           = type;
+		m_output.Rrc.allocate.completion_pid = m_parent.GetProcessor().GetPID();
+		m_output.Rrc.allocate.completion_reg = reg;
 				
-				//FT-BEGIN
-				m_output.Rrc.allocate.redundant      = redundant;
-				m_output.Rrc.allocate.ftmode		 = family.ftmode;
-				//FT-END
+		//FT-BEGIN
+		m_output.Rrc.allocate.redundant      = 0;
+		m_output.Rrc.allocate.ftmode	     = 1;
+		//FT-END
 				
-				m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
-			}
-		}
+		m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
+	    }
 	}
+	else if (start_flag == 3) //start redundant thread
+	{
+	    place.pid = place.pid+1-(place.pid%2)*2;
+
+	    COMMIT
+	    {
+		m_output.Rrc.type = RemoteMessage::MSG_ALLOCATE;
+		m_output.Rrc.allocate.place          = place;
+		m_output.Rrc.allocate.suspend        = suspend;
+		m_output.Rrc.allocate.exclusive      = exclusive;
+		m_output.Rrc.allocate.type           = type;
+		m_output.Rrc.allocate.completion_pid = m_parent.GetProcessor().GetPID();
+		m_output.Rrc.allocate.completion_reg = reg;
+				
+		//FT-BEGIN
+		m_output.Rrc.allocate.redundant	    = 1;
+		m_output.Rrc.allocate.ftmode	    = 1;
+		//FT-END
+				
+		m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
+	    }
+	}
+	else  //noraml thread
+	{
+	    assert (start_flag == 0);
+	    COMMIT
+	    {
+		m_output.Rrc.type = RemoteMessage::MSG_ALLOCATE;
+		m_output.Rrc.allocate.place          = place;
+		m_output.Rrc.allocate.suspend        = suspend;
+		m_output.Rrc.allocate.exclusive      = exclusive;
+		m_output.Rrc.allocate.type           = type;
+		m_output.Rrc.allocate.completion_pid = m_parent.GetProcessor().GetPID();
+		m_output.Rrc.allocate.completion_reg = reg;
+				
+		//FT-BEGIN
+		m_output.Rrc.allocate.redundant	    = 0;
+		m_output.Rrc.allocate.ftmode	    = 0;
+		//FT-END
+				
+		m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
+	    }
+	}
+    }
     return PIPE_CONTINUE;
 }
 
@@ -443,8 +488,6 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecPair(cons
 {
     const Family& family = m_familyTable[m_input.fid];
 
-	if (!family.ftmode)
-		return PIPE_CONTINUE;
 	
     //master thread
     if(!family.redundant)
