@@ -77,7 +77,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::OnCycle()
             // Force a thread switch
             m_output.swch    = true;
             m_output.kill    = false;
-            m_output.suspend = SUSPEND_MISSING_DATA;
+            m_output.suspend = (m_input.Rav.m_state == RST_STORE)? SUSPEND_STORE : SUSPEND_MISSING_DATA;
         }
 
         DebugPipeWrite("F%u/T%u(%llu) %s suspend on non-full operand %s",

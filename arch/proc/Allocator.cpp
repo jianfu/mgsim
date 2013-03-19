@@ -330,6 +330,7 @@ bool Processor::Allocator::AllocateThread(LFID fid, TID tid, bool isNewlyAllocat
     thread->mtid             = INVALID_TID;
     thread->regIndex         = INVALID_REG_INDEX;
     thread->cleanupFlag      = 0;
+    thread->store_ctr        = 2;
     //FT-END
 
     // Initialize dependencies
@@ -637,8 +638,24 @@ bool Processor::Allocator::DecreaseThreadDependency(TID tid, ThreadDependency de
             {
                 return false;
             }
-            COMMIT{ thread.waitingForWrites = false; }
+            COMMIT
+	    {
+		thread.waitingForWrites = false;
+		thread.store_ctr++;
+	    }
         }
+	else if (thread.state == TST_STORE)
+	{
+	    ThreadQueue tq = {tid, tid};
+	    assert (tid != INVALID_TID);
+            if (!ActivateThreads(tq))
+            {
+                return false;
+            }
+            COMMIT{ thread.store_ctr++; }
+	}
+	else
+	     COMMIT{ thread.store_ctr++; }
 
     case THREADDEP_PREV_CLEANED_UP:
     case THREADDEP_TERMINATED:

@@ -22,6 +22,13 @@ Processor::Pipeline::PipeAction Processor::Pipeline::WritebackStage::OnCycle()
         return PIPE_STALL;
     }
     
+    //FT-BEGIN
+    //if current instruction is store and thread.store_ctr is 0
+    //then suspend the thread
+    if (m_input.suspend == SUSPEND_STORE)
+	return PIPE_CONTINUE;
+    //FT-END
+		
     if (m_input.Rrc.type != RemoteMessage::MSG_NONE)
     {	
         // Network activity
@@ -270,7 +277,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::WritebackStage::OnCycle()
                                   m_input.pc_sym);
                     return PIPE_STALL;
                 }
-            }
+	    }
             // Reschedule thread
             else if (allow_reschedule)
             {

@@ -73,6 +73,7 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
         SUSPEND_NONE,           ///< Don't suspend
         SUSPEND_MEMORY_BARRIER, ///< Memory barrier
         SUSPEND_MISSING_DATA,   ///< We're missing data
+	SUSPEND_STORE,          ///< used for specify a store when thread.store_ctr is 0 [FT]
     };
 
     struct RegInfo
@@ -310,6 +311,9 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
         RegisterFile&               m_regFile;
         const DecodeReadLatch&      m_input;
         ReadExecuteLatch&           m_output;
+	FamilyTable&                m_familyTable;
+        ThreadTable&                m_threadTable;
+	ICache&           m_icache;
         std::vector<BypassInfo>     m_bypasses;
         OperandInfo                 m_operand1, m_operand2;
         bool                        m_RaNotPending;
@@ -323,7 +327,7 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
 
         static PipeValue RegToPipeValue(RegType type, const RegValue& src_value);
     public:
-        ReadStage(Pipeline& parent, Clock& clock, const DecodeReadLatch& input, ReadExecuteLatch& output, RegisterFile& regFile,
+        ReadStage(Pipeline& parent, Clock& clock, const DecodeReadLatch& input, ReadExecuteLatch& output, FamilyTable& familyTable, ThreadTable& threadTable, ICache &icache, RegisterFile& regFile,
             const std::vector<BypassInfo>& bypasses,
             Config& config);
     };

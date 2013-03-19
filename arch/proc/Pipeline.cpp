@@ -119,7 +119,7 @@ Processor::Pipeline::Pipeline(
     m_stages.back().output = NULL;
     bypasses.push_back(BypassInfo(m_mwBypass.empty, m_mwBypass.Rc, m_mwBypass.Rcv));
 
-    m_stages[2].stage = new ReadStage(*this, clock, m_drLatch, m_reLatch, regFile, bypasses, config);
+    m_stages[2].stage = new ReadStage(*this, clock, m_drLatch, m_reLatch, familyTable, threadTable, icache, regFile, bypasses, config);
 }
 
 Processor::Pipeline::~Pipeline()
@@ -287,6 +287,7 @@ void Processor::Pipeline::PrintLatchCommon(std::ostream& out, const CommonData& 
         case RST_PENDING: ss << "Pending"; break;
         case RST_EMPTY:   ss << "Empty";   break;
         case RST_WAITING: ss << "Waiting (T" << dec << value.m_waiting.head << ")"; break;
+	case RST_STORE:   ss << "Store";   break;
         case RST_FULL:
             if (type == RT_INTEGER) {
                 ss << "0x" << setw(value.m_size * 2)

@@ -36,6 +36,7 @@ Processor::Pipeline::PipeValue Processor::Pipeline::ReadStage::RegToPipeValue(Re
         dest_value.m_memory  = src_value.m_memory;
         break;
 
+    case RST_STORE:
     case RST_FULL:
         {
             // Make bit-mask and bit-offsets
@@ -177,6 +178,7 @@ bool Processor::Pipeline::ReadStage::ReadBypasses(OperandInfo& operand)
             }
             break;
 
+	case RST_STORE:
         case RST_FULL:
             // Full always overwrites everything else.
             // Get the register from the pipeline value.
@@ -425,6 +427,32 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ReadStage::OnCycle()
     if (!CheckOperandForSuspension(operand1))  // Suspending on operand #1?
     if (!CheckOperandForSuspension(operand2))  // Suspending on operand #2?
     {
+	//Imitate suspending on operand when "current instr is a store" and "store_ctr is 0"
+	//Only for store that two operands are ready
+	Thread& thread = m_threadTable[m_input.tid];
+        Family& family = m_familyTable[thread.family];
+	
+	COMMIT
+	{
+	    if (family.ftmode && m_input.format == IFORMAT_MEM_STORE && thread.store_ctr == 0)
+	    {
+		if (!m_icache.ReleaseCacheLine(thread.cid))
+		    return PIPE_STALL;
+
+		m_output.Rav.m_state        = RST_STORE;
+		thread.state = TST_STORE;
+		thread.pc = m_input.pc;
+		thread.cid = INVALID_CID;
+		
+		if (m_input.logical_index == 0 || m_input.logical_index == 1)
+		    printf ("F%u/T%u(%llu): Thread is suspended due to CB is full!\n",(unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned long long)m_input.logical_index); 
+		
+		return PIPE_CONTINUE;
+	    }
+		
+	    if (family.ftmode && m_input.format == IFORMAT_MEM_STORE)
+		thread.store_ctr--;
+	}
         // Not suspending, output the normal stuff
         COMMIT
         {
@@ -494,7 +522,7 @@ void Processor::Pipeline::ReadStage::Clear(TID tid)
     }
 }
 
-Processor::Pipeline::ReadStage::ReadStage(Pipeline& parent, Clock& clock, const DecodeReadLatch& input, ReadExecuteLatch& output, RegisterFile& regFile,
+Processor::Pipeline::ReadStage::ReadStage(Pipeline& parent, Clock& clock, const DecodeReadLatch& input, ReadExecuteLatch& output, FamilyTable& familyTable, ThreadTable& threadTable, ICache& icache, RegisterFile& regFile,
     const vector<BypassInfo>& bypasses,
     Config& /*config*/
   )
@@ -502,6 +530,9 @@ Processor::Pipeline::ReadStage::ReadStage(Pipeline& parent, Clock& clock, const 
     m_regFile(regFile),
     m_input(input),
     m_output(output),
+    m_familyTable(familyTable),
+    m_threadTable(threadTable),
+    m_icache(icache),
     m_bypasses(bypasses),
     m_operand1(), m_operand2(),
     m_RaNotPending(false)

@@ -305,6 +305,7 @@ enum ThreadState
     TST_SUSPENDED,
     TST_UNUSED,
     TST_TERMINATED,
+    TST_STORE,  //[FT]
     TST_NUMSTATES
 };
 
@@ -382,6 +383,7 @@ enum RegState {
     RST_PENDING,        ///< The register is empty but will be written later
     RST_WAITING,        ///< The register is empty and threads are waiting on it
     RST_FULL,           ///< The register is full
+    RST_STORE,          ///< used for specify a store when thread.store_ctr is 0 [FT]
 };
 
 struct ThreadQueue
