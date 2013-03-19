@@ -153,7 +153,6 @@ bool CompBuffer::Read (MCID id, MemAddr address)
 	    return FAILED;
 	}
 	merge = false;
-	return true;  //Ignore this read when its write still in the CB.
     }
 	
     //Forward request to L2
@@ -252,14 +251,14 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
                     }
                     temp_client     = templine.client;
                     temp_wid        = templine.wid;
-		    /*
+		    
 		    //snoop back to L1 itself
 		    if (!m_clients[real_mcid]->OnMemorySnooped(address, data.data, data.mask))
 		    {
 			DeadlockWrite("Unable to snoop update to cache clients, CB comparison success");
 			return FAILED;		
 		    }
-			*/		
+				
                     DebugMemWrite("Write to m_outgoing from cb%u: %#016llx, Comparison success!", (unsigned)m_mcid, (unsigned long long)address);
                 }
                 else 
