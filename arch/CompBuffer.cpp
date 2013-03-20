@@ -190,7 +190,7 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
     bool redundant = (id >> 2) & 1;
     MCID real_mcid = id >> (m_bufferindexbits + 3);
 
-    if((id & 1) == 1) //DCache
+    if((id & 1) == 1) //DCache & ftmode
     {
         
         std::vector<request_buffer>& m_compBuffer = (coming_from_right == redundant) ? m_compBuffer0 : m_compBuffer1;
@@ -251,26 +251,32 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
                     }
                     temp_client     = templine.client;
                     temp_wid        = templine.wid;
-		    
-		    //snoop back to L1 itself
-		    if (!m_clients[real_mcid]->OnMemorySnooped(address, data.data, data.mask))
-		    {
-			DeadlockWrite("Unable to snoop update to cache clients, CB comparison success");
-			return FAILED;		
-		    }
 				
                     DebugMemWrite("Write to m_outgoing from cb%u: %#016llx, Comparison success!", (unsigned)m_mcid, (unsigned long long)address);
                 }
-                else 
-                {
+                else
                     throw exceptf<SimulationException>(*this, "cb%u: %#016llx, Comparison failed because of address!", (unsigned)m_mcid, (unsigned long long)address);
-				}
 
                 COMMIT{ m_compBuffer[mtid].pop_front(); }
             }
         }
     }
-
+    else
+    {
+	//This is a unprotected write (i.e. out of redundancy scope)
+	//Snoop back to other clients of CB
+	for (size_t i = 0; i < m_clients.size(); ++i)
+	{
+	    if (m_clients[i] != NULL && i != real_mcid)
+	    {
+		if (!m_clients[i]->OnMemorySnooped(address, data.data, data.mask))
+		{
+		    DeadlockWrite("Unable to snoop update to cache clients, unprotected write in CB");
+		    return FAILED;
+		}
+	    }
+	}	
+    }
     
     //They are same, push to m_outgoing and forward it to L2 later.
     //Or it is from DCA.
