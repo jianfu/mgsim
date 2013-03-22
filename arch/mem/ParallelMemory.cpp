@@ -16,6 +16,7 @@ struct ParallelMemory::Request
     MemAddr          address;
     MemData          data;
     WClientID        wid;
+    MCID             l1_index;
 };
 
 class ParallelMemory::Port : public Object
@@ -64,7 +65,7 @@ class ParallelMemory::Port : public Object
 
                 static_cast<VirtualMemory&>(m_memory).Read(request.address, data, m_lineSize);
 
-                if (!m_callback.OnMemoryReadCompleted(request.address, data))
+                if (!m_callback.OnMemoryReadCompleted(request.address, data, request.l1_index))
                 {
                     return FAILED;
                 }
@@ -194,8 +195,9 @@ bool ParallelMemory::Read(MCID id, MemAddr address)
     Request request;
     request.address   = address;
     request.write     = false;
+    request.l1_index  = id & (((size_t) 1 << 8) - 1);
 
-    if (!m_ports[id]->AddRequest(request))
+    if (!m_ports[id>>8]->AddRequest(request))
     {
         return false;
     }

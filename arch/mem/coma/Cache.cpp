@@ -28,8 +28,9 @@ MCID COMA::Cache::RegisterClient(IMemoryCallback& callback, Process& process, St
     traces = m_requests;
 
     m_storages *= opt(storage);
-    p_Requests.SetStorageTraces(m_storages ^ GetOutgoingTrace());
-    p_In.SetStorageTraces(opt(m_storages ^ GetOutgoingTrace()));
+    p_Requests.SetStorageTraces(m_storages ^ GetOutgoingTrace() ^ opt(m_rcompletion));
+    p_In.SetStorageTraces(opt(m_storages ^ GetOutgoingTrace()) ^ opt(m_rcompletion) * opt(m_rcompletion) * opt(m_rcompletion) * opt(m_rcompletion) * opt(m_rcompletion) * opt(m_rcompletion));
+    p_ReadCompletion.SetStorageTraces(m_storages ^ GetOutgoingTrace());
 
     return index;
 }
@@ -45,7 +46,7 @@ void COMA::Cache::UnregisterClient(MCID id)
 bool COMA::Cache::Read(MCID id, MemAddr address)
 {
     assert(address % m_lineSize == 0);
-    
+    //printf("Read to cache%u from request.mcid%u: %#016llx\n", (unsigned)m_id, (unsigned)id, (unsigned long long)address);
     // We need to arbitrate between the different processes on the cache,
     // and then between the different clients. There are 2 arbitrators for this.
     if (!p_bus.Invoke())
@@ -58,9 +59,11 @@ bool COMA::Cache::Read(MCID id, MemAddr address)
     Request req;
     req.address = address;
     req.write   = false;
+    req.client  = id;
+
 
     // Client should have been registered
-    assert(m_clients[id] != NULL);
+    assert(m_clients[id>>8] != NULL);
 
     if (!m_requests.Push(req))
     {
@@ -404,17 +407,36 @@ bool COMA::Cache::OnMessageReceived(Message* msg)
                 }
             }
         }
+		
+	if (!msg->write) 
+	{
+	    if (!OnReadCompleted(msg->address, data, msg->client))
+	    {
+		DeadlockWrite("Unable to notify clients of read completion");
+		++m_numStallingRCompletions;
+		return false;
+	    }
 
-        if (!OnReadCompleted(msg->address, data))
-        {
-            DeadlockWrite("Unable to notify clients of read completion");
-            ++m_numStallingRCompletions;
-            return false;
-        }
+	    // Statistics
+	    COMMIT{++m_numRCompletions; }
+	}
+		
+	for (std::deque<MCID>::const_iterator p = line->clients.begin(); p != line->clients.end(); ++p)
+	{	
+	    if (!OnReadCompleted(msg->address, data, *p))
+	    {
+		DeadlockWrite("Unable to notify clients of read completion");
+		++m_numStallingRCompletions;
+		return false;
+	    }
 
-        // Statistics
-        COMMIT{ ++m_numRCompletions; }
-
+	    // Statistics
+	    COMMIT{++m_numRCompletions; }
+	}
+	
+	COMMIT{ line->clients.clear();} 
+		
+		
         COMMIT{ delete msg; }
         break;
     }
@@ -558,22 +580,45 @@ bool COMA::Cache::OnMessageReceived(Message* msg)
     return true;
 }
 
-bool COMA::Cache::OnReadCompleted(MemAddr addr, const char * data) 
+
+Result COMA::Cache::DoReadCompleted()
 {
-    // Send the completion on the bus
+    assert(!m_rcompletion.Empty());
+	
+    const RCompletion& rc = m_rcompletion.Front();
+	
     if (!p_bus.Invoke())
     {
         DeadlockWrite("Unable to acquire the bus for sending read completion");
-        return false;
+        return FAILED;
     }
-
-    for (std::vector<IMemoryCallback*>::const_iterator p = m_clients.begin(); p != m_clients.end(); ++p)
+	
+    MCID cb_index = rc.client >> 8;
+    MCID l1_index = rc.client & (((size_t) 1 << 8) - 1);
+    
+    if (!m_clients[cb_index]->OnMemoryReadCompleted(rc.addr, rc.data.data, l1_index))
     {
-        if (*p != NULL && !(*p)->OnMemoryReadCompleted(addr, data))
-        {
-            DeadlockWrite("Unable to send read completion to clients");
-            return false;
-        }
+	DeadlockWrite("Unable to send read completion to client %u", (unsigned)cb_index);
+	return FAILED;
+    }
+	
+    m_rcompletion.Pop();
+    return SUCCESS;
+}
+
+
+bool COMA::Cache::OnReadCompleted(MemAddr addr, const char * data, MCID client) 
+{
+    RCompletion rc;
+    rc.addr 	= addr;
+    rc.client  	= client;
+    COMMIT{ std::copy(data, data + m_lineSize, rc.data.data); }
+	
+	
+    if (!m_rcompletion.Push(rc))
+    {
+        DeadlockWrite("Unable to push read completion into buffer");
+        return false;
     }
 
     return true;
@@ -645,6 +690,7 @@ Result COMA::Cache::OnWriteRequest(const Request& req)
             msg->ignore    = false;
             msg->tokens    = 0;
             msg->sender    = m_id;
+	    msg->write     = 1;
 
         }
 
@@ -801,15 +847,18 @@ Result COMA::Cache::OnReadRequest(const Request& req)
             msg->ignore    = false;
             msg->tokens    = 0;
             msg->sender    = m_id;
+	    msg->write     = 0;
+	    msg->client    = req.client;
         }
 
-	    if (!SendMessage(msg, MINSPACE_INSERTION))
+	if (!SendMessage(msg, MINSPACE_INSERTION))
         {
             ++m_numStallingRLoads;
             DeadlockWrite("Unable to buffer read request for next node");
             return FAILED;
         }
 
+		
         // Statistics
         COMMIT { ++m_numRLoads; }
 
@@ -833,8 +882,7 @@ Result COMA::Cache::OnReadRequest(const Request& req)
             ++m_numRFullHits;
         }
 
-
-        if (!OnReadCompleted(req.address, data))
+	if (!OnReadCompleted(req.address, data, req.client))
         {
             ++m_numStallingRHits;
             DeadlockWrite("Unable to notify clients of read completion");
@@ -842,7 +890,9 @@ Result COMA::Cache::OnReadRequest(const Request& req)
         }
     }
     else
-    {
+    {	
+	COMMIT{ line->clients.push_back(req.client); }
+		
         // The line is already being loaded.
         TraceWrite(req.address, "Processing Bus Read Request: Loading Hit");
 
@@ -941,9 +991,11 @@ COMA::Cache::Cache(const std::string& name, COMA& parent, Clock& clock, CacheID 
 
     p_Requests (*this, "requests", delegate::create<Cache, &Cache::DoRequests>(*this)),
     p_In       (*this, "incoming", delegate::create<Cache, &Cache::DoReceive>(*this)),
+    p_ReadCompletion(*this, "read_completion", delegate::create<Cache, &Cache::DoReadCompleted>(*this)),
     p_bus      (*this, clock, "p_bus"),
     m_requests ("b_requests", *this, clock, config.getValue<BufferSize>(*this, "RequestBufferSize")),
-    m_responses("b_responses", *this, clock, config.getValue<BufferSize>(*this, "ResponseBufferSize"))
+    m_responses("b_responses", *this, clock, config.getValue<BufferSize>(*this, "ResponseBufferSize")),
+    m_rcompletion("b_rc",      *this, clock, config.getValueOrDefault<BufferSize>(*this, "RCompletionBufferSize", 8), 6 /*[FT]*/)
 {
     RegisterSampleVariableInObject(m_numRAccesses, SVC_CUMULATIVE);
     RegisterSampleVariableInObject(m_numHardRConflicts, SVC_CUMULATIVE);
@@ -988,13 +1040,16 @@ COMA::Cache::Cache(const std::string& name, COMA& parent, Clock& clock, CacheID 
 
     m_requests.Sensitive(p_Requests);
     m_incoming.Sensitive(p_In);
+    m_rcompletion.Sensitive(p_ReadCompletion);
 
+	
     p_lines.AddProcess(p_In);
     p_lines.AddProcess(p_Requests);
 
     p_bus.AddPriorityProcess(p_In);                   // Update triggers write completion
     p_bus.AddPriorityProcess(p_Requests);             // Read or write hit
-
+    p_bus.AddPriorityProcess(p_ReadCompletion);
+	
     config.registerObject(*this, "cache");
     config.registerProperty(*this, "assoc", (uint32_t)m_assoc);
     config.registerProperty(*this, "sets", (uint32_t)m_sets);

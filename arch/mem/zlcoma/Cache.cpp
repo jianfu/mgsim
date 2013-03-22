@@ -58,7 +58,8 @@ bool ZLCOMA::Cache::Read(MCID id, MemAddr address)
     Request req;
     req.address = address;
     req.write   = false;
-
+    req.client  = id;
+	
     // Client should have been registered
     assert(m_clients[id] != NULL);
 
@@ -404,7 +405,7 @@ Result ZLCOMA::Cache::OnReadRequest(const Request& req)
             m_numHits++;
         }
 
-        if (!OnReadCompleted(req.address, data))
+        if (!OnReadCompleted(req.address, data, req.client))
         {
             return FAILED;
         }
@@ -1005,7 +1006,7 @@ Result ZLCOMA::Cache::OnReadRet(Message* req)
         }
 
         // Acknowledge the read to the memory clients
-        if (!OnReadCompleted(req->address, data))
+        if (!OnReadCompleted(req->address, data, req->client))
         {
             return FAILED;
         }
@@ -1108,7 +1109,7 @@ bool ZLCOMA::Cache::AcknowledgeQueuedWrites(Line* line)
     return true;
 }
 
-bool ZLCOMA::Cache::OnReadCompleted(MemAddr addr, const char* data)
+bool ZLCOMA::Cache::OnReadCompleted(MemAddr addr, const char* data, MCID client)
 {
     // Send the completion on the bus
     if (!p_bus.Invoke())
@@ -1117,15 +1118,14 @@ bool ZLCOMA::Cache::OnReadCompleted(MemAddr addr, const char* data)
         return false;
     }
 
-    for (std::vector<IMemoryCallback*>::const_iterator p = m_clients.begin(); p != m_clients.end(); ++p)
-    {
-        if (*p != NULL && !(*p)->OnMemoryReadCompleted(addr, data))
-        {
-            DeadlockWrite("Unable to send read completion to clients");
-            return false;
-        }
-    }
+    MCID cb_index = client >> 8;
+    MCID l1_index = client & (((size_t) 1 << 8) - 1);
 
+    if (!m_clients[cb_index]->OnMemoryReadCompleted(addr, data, l1_index))
+    {
+	DeadlockWrite("Unable to send read completion to client %u", (unsigned)cb_index);
+	return false;
+    }
     return true;
 }
 

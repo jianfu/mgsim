@@ -129,37 +129,35 @@ bool CompBuffer::Read (MCID id, MemAddr address)
     std::fill(&mask[0], &mask[0]+m_lineSize, false);
     std::vector<request_buffer>& m_compBuffer = (coming_from_right == redundant) ? m_compBuffer0 : m_compBuffer1;
 
-    for (request_buffer::const_iterator p = m_compBuffer[mtid].begin(); p != m_compBuffer[mtid].end(); ++p)
+    //only read in redundancy scope need to be merged
+    if ((id & 1) == 1) //DCache & ftmode
     {
-        if(p->address == address && p->redundant == redundant)
-        {
-            line::blit(&mdata[0], p->data.data, p->data.mask, m_lineSize);
-	    line::setif(&mask[0], true, p->data.mask, m_lineSize);
-	    merge = true;
-	    /*
-	    COMMIT{printf("Read MERGE to cb%u from real_mcid(%u): %#016llx, redundant=%u, right=%u\n", 
-			    (unsigned)m_mcid, (unsigned)real_mcid, (unsigned long long)address,
-			    (unsigned)redundant, (unsigned)coming_from_right);}
-
-	    */
-        }
-     }
-    
-    if (merge)
-    {
-	if (!m_clients[real_mcid]->OnMemorySnooped(address, mdata, mask))
+	for (request_buffer::const_iterator p = m_compBuffer[mtid].begin(); p != m_compBuffer[mtid].end(); ++p)
 	{
-	    DeadlockWrite("Unable to snoop update to cache clients, CB");
-	    return FAILED;
+	    if(p->address == address && p->redundant == redundant)
+	    {
+		line::blit(&mdata[0], p->data.data, p->data.mask, m_lineSize);
+		line::setif(&mask[0], true, p->data.mask, m_lineSize);
+		merge = true;
+	    }
 	}
-	merge = false;
+    
+	if (merge)
+	{
+	    if (!m_clients[real_mcid]->OnMemorySnooped(address, mdata, mask))
+	    {
+		DeadlockWrite("Unable to snoop update to cache clients, CB");
+		return FAILED;
+	    }
+	    merge = false;
+	}
     }
-	
     //Forward request to L2
     Request request;
     request.write     = false;
     request.address   = address;
-    request.mcid    = (m_mcid << (m_bufferindexbits + 3)) | (mtid << 3) | (redundant << 2) | (coming_from_right << 1) | (id & 1);
+    request.mcid      = real_mcid | (m_mcid << 8);
+
     if (!m_outgoing.Push(request))
     {
         DeadlockWrite("Unable to push request to outgoing buffer, CB.");
@@ -300,14 +298,14 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
 }
 
 
-bool CompBuffer::OnMemoryReadCompleted(MemAddr addr, const char* data)
+bool CompBuffer::OnMemoryReadCompleted(MemAddr addr, const char* data, MCID client)
 {
     char mdata[m_lineSize];
     std::copy(data, data + m_lineSize, &mdata[0]);
 
     // FIXME: read completion / snoop should really use the arbitrator, too!
     
-	// merge with outgoing buffer.
+    // merge with outgoing buffer.
     for (Buffer<Request>::const_iterator p = m_outgoing.begin(); p != m_outgoing.end(); ++p)
     {
 	if (p->write && p->address == addr)
@@ -320,6 +318,7 @@ bool CompBuffer::OnMemoryReadCompleted(MemAddr addr, const char* data)
     Response response;
     response.type           = READ;
     response.address        = addr;
+    response.client0        = client;
     std::copy(&mdata[0], &mdata[0] + m_lineSize, response.data.data);
     if (!m_incoming.Push(response))
     {
@@ -395,7 +394,7 @@ Result CompBuffer::DoOutgoing()
     }
     else
     {
-        if (!m_memory.Read(m_mcid, request.address))
+	if (!m_memory.Read(/*m_mcid*/request.mcid, request.address))
         {
             DeadlockWrite("Unable to send read to 0x%016llx to memory, CB", (unsigned long long)request.address);
             return FAILED;
@@ -417,14 +416,11 @@ Result CompBuffer::DoIncoming()
     {
     case READ:
     {
-        for (std::vector<IMemoryCallback*>::const_iterator p = m_clients.begin(); p != m_clients.end(); ++p)
-        {
-            if (*p != NULL && !(*p)->OnMemoryReadCompleted(response.address, response.data.data))
-            {
-                DeadlockWrite("Unable to send read completion to clients from CompBuffer");
-                return FAILED;
-            }
-        }
+	if (!m_clients[response.client0]->OnMemoryReadCompleted(response.address, response.data.data, response.client0))
+	{
+	    DeadlockWrite("Unable to send read completion to client %u from cb%u", (unsigned)response.client0, (unsigned)m_mcid);
+	    return FAILED;
+	}
         break;
     }
 

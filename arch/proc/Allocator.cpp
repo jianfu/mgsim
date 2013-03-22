@@ -330,7 +330,7 @@ bool Processor::Allocator::AllocateThread(LFID fid, TID tid, bool isNewlyAllocat
     thread->mtid             = INVALID_TID;
     thread->regIndex         = INVALID_REG_INDEX;
     thread->cleanupFlag      = 0;
-    thread->store_ctr        = 2;
+    thread->store_ctr        = 4096;
     //FT-END
 
     // Initialize dependencies

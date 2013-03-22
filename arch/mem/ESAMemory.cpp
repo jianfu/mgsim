@@ -303,10 +303,11 @@ bool ESAMemory::Read(MCID id, MemAddr address)
     Request req;
     req.address = address;
     req.write   = false;
-    
+    req.client  = id;
+
     
     // Client should have been registered
-    assert(m_clients[id] != NULL);
+    assert(m_clients[id>>8] != NULL);
 
     if (!m_requests.Push(req))
     {
@@ -483,7 +484,7 @@ bool ESAMemory::EvictLine(Line* line)
 }
 
     
-bool ESAMemory::OnReadCompleted(MemAddr addr, const char * data)
+bool ESAMemory::OnReadCompleted(MemAddr addr, const char * data, MCID client)
 {
     // Send the completion on the bus
     if (!p_bus.Invoke())
@@ -492,15 +493,15 @@ bool ESAMemory::OnReadCompleted(MemAddr addr, const char * data)
         return false;
     }
   
-    for (std::vector<IMemoryCallback*>::const_iterator p = m_clients.begin(); p != m_clients.end(); ++p)
+    MCID cb_index = client >> 8;
+    MCID l1_index = client & (((size_t) 1 << 8) - 1);
+	
+    if (!m_clients[cb_index]->OnMemoryReadCompleted(addr, data, l1_index))
     {
-        if (*p != NULL && !(*p)->OnMemoryReadCompleted(addr, data))
-        {
-            DeadlockWrite("Unable to send read completion to clients");
-            return false;
-        }
+	DeadlockWrite("Unable to send read completion to client %u", (unsigned)cb_index);
+	return false;
     }
-    
+
     return true;
 }
 
@@ -714,7 +715,7 @@ Result ESAMemory::OnReadRequest(const Request& req)
         DebugMemWrite("Processing Bus Read Request for address %#016llx: Sending read completion to client %u",
                       (unsigned long long)req.address, (unsigned) req.client);
         
-        if (!OnReadCompleted(req.address, data.data))
+        if (!OnReadCompleted(req.address, data.data, req.client))
         {
             ++m_numStallingRCompletions;
             DeadlockWrite("Unable to notify clients of read completion");
@@ -817,7 +818,7 @@ Result ESAMemory::DoResponses()
         }
     }
     
-    if (!OnReadCompleted(request.address, data.data))
+    if (!OnReadCompleted(request.address, data.data, request.client))
     {
         return FAILED;
     }

@@ -227,7 +227,6 @@ Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAdd
     // Update last line access
     COMMIT{ line->access = GetCycleNo(); }
 
-    //COMMIT{printf("Read from m_mcid(%u): %#016llx\n", (unsigned)m_mcid, (unsigned long long)address);}	
     if (result == DELAYED)
     {
         // A new line has been allocated; send the request to memory
@@ -416,7 +415,7 @@ Result Processor::DCache::Write(MemAddr address, void* data, MemSize size, LFID 
     return DELAYED;
 }
 
-bool Processor::DCache::OnMemoryReadCompleted(MemAddr addr, const char* data)
+bool Processor::DCache::OnMemoryReadCompleted(MemAddr addr, const char* data, MCID client)
 {
     // Check if we have the line and if its loading.
     // This method gets called whenever a memory read completion is put on the
@@ -759,8 +758,7 @@ Result Processor::DCache::DoOutgoingRequests()
     }
     else
     {
-	//COMMIT{printf("Read from m_mcid(%u): %#016llx, request.mcid=%u\n", (unsigned)m_mcid, (unsigned long long)request.address, (unsigned)mcid);}
-        if (!m_memory.Read(mcid, request.address))
+	if (!m_memory.Read(mcid, request.address))
         {
             DeadlockWrite("Unable to send read to 0x%016llx to memory", (unsigned long long)request.address);
             return FAILED;

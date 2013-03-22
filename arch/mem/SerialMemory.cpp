@@ -44,9 +44,10 @@ bool SerialMemory::Read(MCID id, MemAddr address)
     assert(id < m_clients.size() && m_clients[id] != NULL);
 
     Request request;
-    request.callback  = m_clients[id];
+    request.callback  = m_clients[id>>8];
     request.address   = address;
     request.write     = false;
+    request.l1_index  = id & (((size_t) 1 << 8) - 1);
 
     if (!m_requests.Push(request))
     {
@@ -125,7 +126,7 @@ Result SerialMemory::DoRequests()
 
                 VirtualMemory::Read(request.address, data, m_lineSize);
 
-                if (!request.callback->OnMemoryReadCompleted(request.address, data))
+                if (!request.callback->OnMemoryReadCompleted(request.address, data, request.l1_index))
                 {
                     return FAILED;
                 }

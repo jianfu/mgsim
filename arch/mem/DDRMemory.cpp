@@ -23,6 +23,7 @@ struct DDRMemory::Request
     MemAddr     address;
     MemData     data;
     WClientID   wid;
+    MCID        l1_index;
 };
 
 class DDRMemory::Interface : public Object, public DDRChannel::ICallback
@@ -152,7 +153,7 @@ public:
             return FAILED;
         }
 
-        if (!request.client->callback->OnMemoryReadCompleted(request.address, request.data.data)) {
+        if (!request.client->callback->OnMemoryReadCompleted(request.address, request.data.data, request.l1_index)) {
             return FAILED;
         }
 
@@ -323,8 +324,9 @@ bool DDRMemory::Read(MCID id, MemAddr address)
 
     Request request;
     request.address   = address;
-    request.client    = &m_clients[id];
+    request.client    = &m_clients[id>>8];
     request.write     = false;
+	request.l1_index  = id & (((size_t) 1 << 8) - 1);
 
     Interface& chan = *m_ifs[ if_index ];
     if (!chan.AddIncomingRequest(request))

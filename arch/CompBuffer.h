@@ -87,7 +87,7 @@ namespace Simulator
 
         //Forward to L1, From L2
         //Just forwarding, NOP
-        bool OnMemoryReadCompleted(MemAddr addr, const char* data);
+        bool OnMemoryReadCompleted(MemAddr addr, const char* data, MCID client);
         bool OnMemoryWriteCompleted(WClientID wid);
         bool OnMemorySnooped(MemAddr addr, const char* data, const bool* mask);
         bool OnMemoryInvalidated(MemAddr addr);

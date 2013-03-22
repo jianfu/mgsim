@@ -127,7 +127,7 @@ public:
     size_t GetLineSize() const { return m_lineSize; }
 
     // Memory callbacks
-    bool OnMemoryReadCompleted(MemAddr addr, const char* data) override;
+    bool OnMemoryReadCompleted(MemAddr addr, const char* data, MCID client) override;
     bool OnMemoryWriteCompleted(TID tid) override;
     bool OnMemorySnooped(MemAddr addr, const char* data, const bool* mask) override;
     bool OnMemoryInvalidated(MemAddr addr) override;

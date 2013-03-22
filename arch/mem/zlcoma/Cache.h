@@ -108,7 +108,7 @@ private:
     bool  ClearLine(Line* line);
     bool  EvictLine(Line* line, const Request& req);
     bool  AcknowledgeQueuedWrites(Line* line);
-    bool  OnReadCompleted(MemAddr addr, const char * data);
+    bool  OnReadCompleted(MemAddr addr, const char * data, MCID client);
 
     // Processes
     Result DoRequests();

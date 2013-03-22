@@ -23,6 +23,7 @@ class SerialMemory : public Object, public IMemory, public VirtualMemory
         IMemoryCallback* callback;
         WClientID        wid;
         bool             write;
+	MCID             l1_index;
     };
 
     // IMemory

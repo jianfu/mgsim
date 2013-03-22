@@ -33,6 +33,7 @@ public:
         bool         dirty;     ///< Dirty: line has been written to
         unsigned int updating;  ///< Number of REQUEST_UPDATEs pending on this line
         bool         valid[MAX_MEMORY_OPERATION_SIZE]; ///< Validity bitmask
+	std::deque<MCID>    clients;   //[FT] used to buffer read request to the loading line
     };
 
 private:
@@ -43,6 +44,13 @@ private:
         MemAddr      address;
         unsigned int client;
         WClientID    wid;
+    };
+
+    struct RCompletion
+    {
+	MemAddr		addr;
+	MemData		data;
+	MCID		client;
     };
 
     IBankSelector&                m_selector;
@@ -103,12 +111,14 @@ private:
     // Processes
     Process p_Requests;
     Process p_In;
+    Process p_ReadCompletion;
 
     // Incoming requests from the processors
     // First arbitrate, then buffer (models a bus)
     ArbitratedService<PriorityCyclicArbitratedPort> p_bus;
     Buffer<Request>     m_requests;
     Buffer<MemData>     m_responses;
+    Buffer<RCompletion>	m_rcompletion;
 
     Line* FindLine(MemAddr address);
     Line* AllocateLine(MemAddr address, bool empty_only, MemAddr *ptag = NULL);
@@ -117,11 +127,12 @@ private:
     // Processes
     Result DoRequests();
     Result DoReceive();
+    Result DoReadCompleted();
 
     Result OnReadRequest(const Request& req);
     Result OnWriteRequest(const Request& req);
     bool OnMessageReceived(Message* msg);
-    bool OnReadCompleted(MemAddr addr, const char * data);
+    bool OnReadCompleted(MemAddr addr, const char * data, MCID client);
 public:
     Cache(const std::string& name, COMA& parent, Clock& clock, CacheID id, Config& config);
 

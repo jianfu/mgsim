@@ -117,7 +117,7 @@ private:
     Line* FindLine(MemAddr address); 
     Line* AllocateLine(MemAddr address, bool empty_only, MemAddr *ptag = NULL);
     bool  EvictLine(Line* line);
-    bool  OnReadCompleted(MemAddr addr, const char * data);
+    bool  OnReadCompleted(MemAddr addr, const char * data, MCID client);
     bool  GetResponse(const Request& req);
     
     

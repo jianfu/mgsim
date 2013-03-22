@@ -378,7 +378,7 @@ Result Processor::ICache::Fetch(MemAddr address, MemSize size, TID* tid, CID* ci
     return DELAYED;
 }
 
-bool Processor::ICache::OnMemoryReadCompleted(MemAddr addr, const char *data)
+bool Processor::ICache::OnMemoryReadCompleted(MemAddr addr, const char *data, MCID client)
 {
     // Instruction cache line returned, store in cache and Buffer
 

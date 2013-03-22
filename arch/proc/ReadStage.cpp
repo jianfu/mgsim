@@ -444,8 +444,8 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ReadStage::OnCycle()
 		thread.pc = m_input.pc;
 		thread.cid = INVALID_CID;
 		
-		if (m_input.logical_index == 0 || m_input.logical_index == 1)
-		    printf ("F%u/T%u(%llu): Thread is suspended due to CB is full!\n",(unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned long long)m_input.logical_index); 
+		//if (m_input.logical_index == 0 || m_input.logical_index == 1)
+		 //   printf ("F%u/T%u(%llu): Thread is suspended due to CB is full!\n",(unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned long long)m_input.logical_index); 
 		
 		return PIPE_CONTINUE;
 	    }

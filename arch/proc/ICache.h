@@ -78,7 +78,7 @@ public:
     bool   IsEmpty() const;
 
     // IMemoryCallback
-    bool   OnMemoryReadCompleted(MemAddr addr, const char* data) override;
+    bool   OnMemoryReadCompleted(MemAddr addr, const char* data, MCID client) override;
     bool   OnMemoryWriteCompleted(TID tid) override;
     bool   OnMemorySnooped(MemAddr addr, const char* data, const bool* mask) override;
     bool   OnMemoryInvalidated(MemAddr addr) override;

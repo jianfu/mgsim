@@ -73,6 +73,7 @@ protected:
 
             // Number of tokens held by this request
             unsigned int tokens;
+	    MCID client;
         };
 
         // transient tokens cannot be grabbed by anybody, but can be transformed into permanent token by priority token

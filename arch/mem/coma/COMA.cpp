@@ -113,7 +113,8 @@ bool COMA::Read(MCID id, MemAddr address)
         m_nread_bytes += m_lineSize;
     }
     // Forward the read to the cache associated with the callback
-    return m_clientMap[id].first->Read(m_clientMap[id].second, address);
+    MCID mcid = (m_clientMap[id>>8].second << 8) | (id & (((size_t) 1 << 8) - 1));
+    return m_clientMap[id>>8].first->Read(/*m_clientMap[id].second*/mcid, address);
 }
 
 bool COMA::Write(MCID id, MemAddr address, const MemData& data, WClientID wid)
