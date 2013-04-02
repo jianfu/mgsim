@@ -36,7 +36,6 @@ Processor::Pipeline::PipeValue Processor::Pipeline::ReadStage::RegToPipeValue(Re
         dest_value.m_memory  = src_value.m_memory;
         break;
 
-    case RST_STORE:
     case RST_FULL:
         {
             // Make bit-mask and bit-offsets
@@ -178,7 +177,6 @@ bool Processor::Pipeline::ReadStage::ReadBypasses(OperandInfo& operand)
             }
             break;
 
-	case RST_STORE:
         case RST_FULL:
             // Full always overwrites everything else.
             // Get the register from the pipeline value.

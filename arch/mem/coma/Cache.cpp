@@ -995,7 +995,7 @@ COMA::Cache::Cache(const std::string& name, COMA& parent, Clock& clock, CacheID 
     p_bus      (*this, clock, "p_bus"),
     m_requests ("b_requests", *this, clock, config.getValue<BufferSize>(*this, "RequestBufferSize")),
     m_responses("b_responses", *this, clock, config.getValue<BufferSize>(*this, "ResponseBufferSize")),
-    m_rcompletion("b_rc",      *this, clock, config.getValueOrDefault<BufferSize>(*this, "RCompletionBufferSize", 8), 6 /*[FT]*/)
+    m_rcompletion("b_rc",      *this, clock, config.getValueOrDefault<BufferSize>(*this, "RCompletionBufferSize", 64), 6 /*[FT]*/)
 {
     RegisterSampleVariableInObject(m_numRAccesses, SVC_CUMULATIVE);
     RegisterSampleVariableInObject(m_numHardRConflicts, SVC_CUMULATIVE);
