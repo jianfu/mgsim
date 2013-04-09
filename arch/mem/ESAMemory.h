@@ -25,7 +25,7 @@ public:
         MemData      mdata;
         bool         write;
         MemAddr      address;
-        unsigned int client;
+        MCID         client;
         WClientID    wid;
     };    
     enum LineState
@@ -43,6 +43,14 @@ public:
         CycleNo      access;    ///< Last access time (for LRU replacement)
         bool         dirty;     ///< Dirty: line has been written to
         bool         valid[MAX_MEMORY_OPERATION_SIZE]; ///< Validity bitmask
+	std::deque<MCID>    clients;   //[FT] used to buffer read request to the loading line
+    };
+
+    struct RCompletion
+    {
+	MemAddr		addr;
+	MemData		data;
+	MCID		client;
     };
 
 private:
@@ -101,6 +109,7 @@ private:
     Process p_Requests;
     Process p_Responses;
     Process p_Outgoing;
+    Process p_ReadCompletion;
 
     // Incoming requests from the processors
     // First arbitrate, then buffer (models a bus)
@@ -113,6 +122,7 @@ private:
     Buffer<Request>     m_requests;
     Buffer<Request>     m_outgoing;
     Buffer<Request>     m_responses;
+    Buffer<RCompletion>	m_rcompletion;
     
     Line* FindLine(MemAddr address); 
     Line* AllocateLine(MemAddr address, bool empty_only, MemAddr *ptag = NULL);
@@ -125,6 +135,7 @@ private:
     Result DoRequests();
     Result DoResponses();
     Result DoOutgoing();
+    Result DoReadCompleted();
 
     Result OnReadRequest(const Request& req);
     Result OnWriteRequest(const Request& req);    

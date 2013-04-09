@@ -266,9 +266,9 @@ MCID ESAMemory::RegisterClient(IMemoryCallback& callback, Process& process, Stor
 
     m_storages *= opt(storage);
     
-    p_Requests.SetStorageTraces(m_storages ^ m_outgoing);
-    p_Responses.SetStorageTraces(m_storages);
-
+    p_Requests.SetStorageTraces(m_storages ^ m_outgoing ^ opt(m_rcompletion));
+    p_Responses.SetStorageTraces(m_storages ^ opt(m_rcompletion) * opt(m_rcompletion) * opt(m_rcompletion) * opt(m_rcompletion));
+    p_ReadCompletion.SetStorageTraces(m_storages ^ m_outgoing);
    // m_registry.registerBidiRelation(callback.GetMemoryPeer(), this, "ESAMemory");
     
     return index;
@@ -486,23 +486,47 @@ bool ESAMemory::EvictLine(Line* line)
     
 bool ESAMemory::OnReadCompleted(MemAddr addr, const char * data, MCID client)
 {
-    // Send the completion on the bus
-    if (!p_bus.Invoke())
+    if (client == -1)
+	return true;
+
+    RCompletion rc;
+    rc.addr 	= addr;
+    rc.client  	= client;
+    COMMIT{ std::copy(data, data + m_lineSize, rc.data.data); }
+
+    if (!m_rcompletion.Push(rc))
     {
-        DeadlockWrite("Unable to acquire the bus for sending read completion");
+        DeadlockWrite("Unable to push read completion into buffer, ESAMemory");
         return false;
-    }
-  
-    MCID cb_index = client >> 8;
-    MCID l1_index = client & (((size_t) 1 << 8) - 1);
-	
-    if (!m_clients[cb_index]->OnMemoryReadCompleted(addr, data, l1_index))
-    {
-	DeadlockWrite("Unable to send read completion to client %u", (unsigned)cb_index);
-	return false;
     }
 
     return true;
+}
+
+
+Result ESAMemory::DoReadCompleted()
+{
+    assert(!m_rcompletion.Empty());
+
+    const RCompletion& rc = m_rcompletion.Front();
+
+    if (!p_bus.Invoke())
+    {
+        DeadlockWrite("Unable to acquire the bus for sending read completion, ESAMemory");
+        return FAILED;
+    }
+
+    MCID cb_index = rc.client >> 8;
+    MCID l1_index = rc.client & (((size_t) 1 << 8) - 1);
+
+    if (!m_clients[cb_index]->OnMemoryReadCompleted(rc.addr, rc.data.data, l1_index))
+    {
+	DeadlockWrite("Unable to send read completion to client %u, ESAMemory", (unsigned)cb_index);
+	return FAILED;
+    }
+
+    m_rcompletion.Pop();
+    return SUCCESS;
 }
 
 // Handles a write request from below
@@ -572,6 +596,7 @@ Result ESAMemory::OnWriteRequest(const Request& req)
         Request request;
         request.write = false;
         request.address = req.address;
+	request.client = -1;
         
         if(!m_outgoing.Push(request))
         {
@@ -728,6 +753,8 @@ Result ESAMemory::OnReadRequest(const Request& req)
         DebugMemWrite("Processing Bus Read Request for address %#016llx: Loading Hit line of tag %#016llx",
                       (unsigned long long)req.address,(unsigned long long)line->tag);
 
+	COMMIT{ line->clients.push_back(req.client); }
+
         // We can ignore this request; the completion of the earlier load
         // will put the data on the bus so this requester will also get it.
         assert(line->state == LINE_LOADING);
@@ -822,7 +849,18 @@ Result ESAMemory::DoResponses()
     {
         return FAILED;
     }
-    
+
+    for (std::deque<MCID>::const_iterator p = line->clients.begin(); p != line->clients.end(); ++p)
+    {
+	if (!OnReadCompleted(request.address, data.data, *p))
+	{
+	    DeadlockWrite("Unable to notify clients of read completion, ESAMemory");
+	    return FAILED;
+	}
+    }
+
+    COMMIT{ line->clients.clear();} 
+
     m_responses.Pop();
     return SUCCESS;
 }
@@ -913,11 +951,13 @@ ESAMemory::ESAMemory(const std::string& name, Simulator::Object& parent, Clock& 
     p_Requests (*this, "incoming requests", delegate::create<ESAMemory, &ESAMemory::DoRequests>(*this)),
     p_Responses(*this, "memory responses",  delegate::create<ESAMemory, &ESAMemory::DoResponses>(*this)),
     p_Outgoing (*this, "outgoing requests", delegate::create<ESAMemory, &ESAMemory::DoOutgoing>(*this)),
+    p_ReadCompletion(*this, "read_completion", delegate::create<ESAMemory, &ESAMemory::DoReadCompleted>(*this)), 
     p_bus      (*this, clock, "p_bus"),
     p_ddr      (*this, clock, "p_ddr"),
     m_requests ("b_requests", *this,  clock, config.getValue<BufferSize>(*this, "RequestBufferSize")),
     m_outgoing ("b_outgoing", *this,  clock, config.getValue<BufferSize>(*this, "OutgoingBufferSize")), 
-    m_responses("b_responses", *this, clock, config.getValue<BufferSize>(*this, "ResponseBufferSize"))
+    m_responses("b_responses", *this, clock, config.getValue<BufferSize>(*this, "ResponseBufferSize")),
+    m_rcompletion("b_rc",      *this, clock, config.getValueOrDefault<BufferSize>(*this, "RCompletionBufferSize", 64), 6 /*[FT]*/)
 {
     
     RegisterSampleVariableInObject(m_numRAccesses, SVC_CUMULATIVE);
@@ -954,7 +994,8 @@ ESAMemory::ESAMemory(const std::string& name, Simulator::Object& parent, Clock& 
 
     m_requests.Sensitive(p_Requests);
     m_responses.Sensitive(p_Responses);
-    
+    m_rcompletion.Sensitive(p_ReadCompletion);
+	
     m_outgoing.Sensitive(p_Outgoing);
     
     p_lines.AddProcess(p_Responses);
@@ -962,6 +1003,7 @@ ESAMemory::ESAMemory(const std::string& name, Simulator::Object& parent, Clock& 
 
     p_bus.AddPriorityProcess(p_Responses);             // Update triggers write completion
     p_bus.AddPriorityProcess(p_Requests);             // Read or write hit
+    p_bus.AddPriorityProcess(p_ReadCompletion);
 
     // Create the interfaces
         
