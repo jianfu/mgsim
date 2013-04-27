@@ -19,6 +19,8 @@
 #include <arch/dev/RPC.h>
 #include <arch/dev/RPC_unix.h>
 
+#include <sim/rusage.h>
+
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
@@ -477,11 +479,16 @@ void MGSystem::PrintState(const vector<string>& /*unused*/) const
 
 void MGSystem::PrintAllStatistics(ostream& os) const
 {
+    ResourceUsage ru(true);
+
     os << dec
        << GetKernel().GetCycleNo() << "\t# master cycle counter" << endl
        << m_clock.GetCycleNo() << "\t# core cycle counter" << endl
        << GetOp() << "\t# total executed instructions" << endl
-       << GetFlop() << "\t# total issued fp instructions" << endl;
+       << GetFlop() << "\t# total issued fp instructions" << endl
+       << ru.GetUserTime() << "\t# total real time in user mode (us)" << endl
+       << ru.GetSystemTime() << "\t# total real time in system mode (us)" << endl
+       << ru.GetMaxResidentSize() << "\t# maximum resident set size (Kibytes)" << endl;
     PrintCoreStats(os);
     os << "## memory statistics:" << endl;
     PrintMemoryStatistics(os);
@@ -628,6 +635,8 @@ MGSystem::MGSystem(Config& config, bool quiet)
         clog << endl
              << "Instanciating components..." << endl;
     }
+
+    ResourceUsage ru1(true); // mark resource usage so far
 
     PSize numProcessors = m_config.getValue<PSize>("NumProcessors");
 
@@ -997,6 +1006,9 @@ MGSystem::MGSystem(Config& config, bool quiet)
 
     if (!quiet)
     {
+	ResourceUsage ru2(true);
+	ru2 = ru2 - ru1;
+
         clog << "Location of `objdump': " << m_objdump_cmd << endl;
 
         static char const qual[] = {'M', 'G', 'T', 'P', 'E', 'Z', 'Y'};
@@ -1009,7 +1021,10 @@ MGSystem::MGSystem(Config& config, bool quiet)
              << dec
              << CountComponents(m_root) << " components, "
              << Process::GetAllProcesses().size() << " processes, "
-             << "simulation running at " << dec << masterfreq << " " << qual[q] << "Hz" << endl;
+             << "simulation running at " << dec << masterfreq << " " << qual[q] << "Hz" << endl
+	     << "Instantiation costs: "
+	     << ru2.GetUserTime() << " us, "
+	     << ru2.GetMaxResidentSize() << " KiB (approx)" << endl;
     }
 }
 
