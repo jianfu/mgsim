@@ -119,8 +119,8 @@ enum {
 enum {
 
     /* local operations */
-    A_UTHREAD_DC_MASK    = 0x78,
-    A_UTHREAD_DC_VALUE   = 0x00,
+    A_UTHREAD_LOCAL_MASK  = 0x70,
+    A_UTHREAD_LOCAL_VALUE = 0x00,
 
     A_UTHREAD_LDBP       = 0x00,
     A_UTHREAD_LDFP       = 0x01,
@@ -131,10 +131,9 @@ enum {
     A_UTHREAD_GETASR     = 0x06,
     A_UTHREAD_GETAPR     = 0x07,
 
-    A_UTHREAD_DZ_MASK    = 0x78,
-    A_UTHREAD_DZ_VALUE   = 0x08,
-
     A_UTHREAD_BREAK      = 0x08,
+    A_UTHREAD_TRAP       = 0x09,
+    A_UTHREAD_CHKEX      = 0x0A,
     A_UTHREAD_PRINT      = 0x0F,
     A_UTHREADF_PRINT     = 0x00F,
 

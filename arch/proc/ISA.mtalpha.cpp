@@ -1097,25 +1097,29 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
     case IFORMAT_FPOP:
         if (m_input.opcode == A_OP_UTHREAD)
         {
-            if ((m_input.function & A_UTHREAD_DC_MASK) == A_UTHREAD_DC_VALUE)
+            if ((m_input.function & A_UTHREAD_LOCAL_MASK) == A_UTHREAD_LOCAL_VALUE)
             {
-                COMMIT {
-                    m_output.Rcv.m_state   = RST_FULL;
+                COMMIT { //TODO: this probably won't work, due to the PIPE_FLUSH return?
                     switch (m_input.function)
                     {
-                    case A_UTHREAD_LDBP: m_output.Rcv.m_integer = m_parent.GetProcessor().GetTLSAddress(m_input.fid, m_input.tid); break;
-                    case A_UTHREAD_LDFP: 
+                    case A_UTHREAD_LDBP:
+                        m_output.Rcv.m_state = RST_FULL;
+                        m_output.Rcv.m_integer = m_parent.GetProcessor().GetTLSAddress(m_input.fid, m_input.tid);
+                        break;
+                    case A_UTHREAD_LDFP:
                     {
+                        m_output.Rcv.m_state = RST_FULL;
                         const MemAddr tls_base = m_parent.GetProcessor().GetTLSAddress(m_input.fid, m_input.tid);
                         const MemAddr tls_size = m_parent.GetProcessor().GetTLSSize();
                         m_output.Rcv.m_integer = tls_base + tls_size;
                         break;
                     }
-                    case A_UTHREAD_GETFID: m_output.Rcv.m_integer = m_input.fid; break;
-                    case A_UTHREAD_GETTID: m_output.Rcv.m_integer = m_input.tid; break;
-                    case A_UTHREAD_GETCID: m_output.Rcv.m_integer = m_parent.GetProcessor().GetPID(); break;
+                    case A_UTHREAD_GETFID: m_output.Rcv.m_state = RST_FULL; m_output.Rcv.m_integer = m_input.fid; break;
+                    case A_UTHREAD_GETTID: m_output.Rcv.m_state = RST_FULL; m_output.Rcv.m_integer = m_input.tid; break;
+                    case A_UTHREAD_GETCID: m_output.Rcv.m_state = RST_FULL; m_output.Rcv.m_integer = m_parent.GetProcessor().GetPID(); break;
                     case A_UTHREAD_GETPID:
                     {
+                        m_output.Rcv.m_state = RST_FULL;
                         PlaceID place;
                         place.size = m_input.placeSize;
 
@@ -1131,18 +1135,39 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                         m_output.Rcv.m_integer = m_parent.GetProcessor().PackPlace(place);
                         break;
                     }
-                    case A_UTHREAD_GETASR: m_output.Rcv.m_integer = m_parent.GetProcessor().ReadASR(Rbv); break;
-                    case A_UTHREAD_GETAPR: m_output.Rcv.m_integer = m_parent.GetProcessor().ReadAPR(Rbv); break;
+                    case A_UTHREAD_GETASR: m_output.Rcv.m_state = RST_FULL; m_output.Rcv.m_integer = m_parent.GetProcessor().ReadASR(Rbv); break;
+                    case A_UTHREAD_GETAPR: m_output.Rcv.m_state = RST_FULL; m_output.Rcv.m_integer = m_parent.GetProcessor().ReadAPR(Rbv); break;
+                    case A_UTHREAD_CHKEX:
+                    {
+                        TID victim = m_excpTable.GetVictimThread(m_input.tid);
+                        if (victim == INVALID_TID)
+                        {
+                            m_output.swch = true;
+                            m_output.kill = false;
+                            m_output.suspend = SUSPEND_WAITING_EXCEPTION;
+                            m_output.pc -= sizeof(Instruction);
+                            m_excpTable[m_input.tid].chkexWaiting = true;
+                            return PIPE_FLUSH;
+                        }
+                        else
+                        {
+                            m_output.Rcv.m_state = RST_FULL;
+                            m_output.Rcv.m_integer = victim;
+                        }
+                        break;
                     }
-                }
-            }
-            else if ((m_input.function & A_UTHREAD_DZ_MASK) == A_UTHREAD_DZ_VALUE)
-            {
-                COMMIT{ m_output.Rc = INVALID_REG; }
-                switch (m_input.function)
-                {
-                case A_UTHREAD_BREAK:    ExecBreak(); break;
-                case A_UTHREAD_PRINT:    COMMIT{ ExecDebug(Rav, Rbv); }; break;
+
+                    // Rc unused
+
+                    case A_UTHREAD_BREAK:  m_output.Rc = INVALID_REG;  ExecBreak(); break;
+                    case A_UTHREAD_TRAP:
+                        m_output.Rc = INVALID_REG;
+                        m_output.excp |= EXCP_BREAKPOINT;
+                        m_output.swch = true;
+                        m_output.suspend = SUSPEND_EXCEPTION;
+                        return PIPE_FLUSH;
+                    case A_UTHREAD_PRINT: m_output.Rc = INVALID_REG; ExecDebug(Rav, Rbv); break;
+                    }
                 }
             }
             else if ((m_input.function & A_UTHREAD_REMOTE_MASK) == A_UTHREAD_REMOTE_VALUE)

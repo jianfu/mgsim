@@ -31,7 +31,9 @@ Processor::Processor(const std::string& name, Object& parent, Clock& clock, PID 
     m_allocator   ("alloc",         *this, clock, m_familyTable, m_threadTable, m_registerFile, m_raunit, m_icache, m_dcache, m_network, m_pipeline, config),
     m_icache      ("icache",        *this, clock, m_allocator, memory, config),
     m_dcache      ("dcache",        *this, clock, m_allocator, m_familyTable, m_threadTable/*[FT]*/, m_registerFile, memory, config),
-    m_pipeline    ("pipeline",      *this, clock, m_registerFile, m_network, m_allocator, m_familyTable, m_threadTable, m_icache, m_dcache, fpu, config),
+    m_excpTable   ("exceptions",    *this, clock, config),
+    m_excpHandler ("excphandler",   *this, clock, m_excpTable, m_allocator, m_familyTable, m_registerFile, config),
+    m_pipeline    ("pipeline",      *this, clock, m_registerFile, m_network, m_allocator, m_familyTable, m_threadTable, m_icache, m_dcache, m_excpTable, m_excpHandler, fpu, config),
     m_network     ("network",       *this, clock, grid, m_allocator, m_registerFile, m_familyTable, config),
     m_mmio        ("mmio",          *this, clock),
     m_apr_file("aprs", *this, config),
@@ -127,6 +129,7 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
     //FT-END
     m_allocator.p_alloc.AddProcess(m_allocator.p_FamilyCreate);         // Local creates
 
+    m_excpHandler.p_service.AddProcess(m_pipeline.p_Pipeline);
 
     if (m_io_if != NULL)
     {
@@ -153,6 +156,7 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
     m_allocator.p_readyThreads.AddProcess(m_allocator.p_ThreadAllocate);    // Thread creation
     m_allocator.p_readyThreads.AddProcess(m_allocator.p_FamilyAllocate);    // Thread wakeup due to family allocation
     m_allocator.p_readyThreads.AddProcess(m_allocator.p_FamilyCreate);      // Thread wakeup due to local create completion
+    m_allocator.p_readyThreads.AddProcess(m_excpHandler.p_NewException);    // Thread wakeup due to exception (handler wakeup)
 
     m_allocator.p_activeThreads.AddProcess(m_icache.p_Incoming);            // Thread activation due to I-Cache line return
     m_allocator.p_activeThreads.AddProcess(m_allocator.p_ThreadActivation); // Thread activation due to I-Cache hit (from Ready Queue)
@@ -328,6 +332,9 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
 
     // m_dcache.p_Outgoing is set in the memory
 
+    m_excpHandler.p_NewException.SetStorageTraces(
+        opt(m_allocator.m_readyThreads2) );
+
     StorageTraceSet pls_writeback =
 		opt(m_allocator.m_rmtwr) *
         opt(DELEGATE) *
@@ -338,8 +345,9 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
 	    (m_allocator.m_readyThreads1 * m_allocator.m_rcleanup * m_allocator.m_cleanup) ^ /*[FT]*/
             m_allocator.m_cleanup ^
 	    (m_allocator.m_rcleanup * m_allocator.m_cleanup) ^ /*[FT]*/
-            m_allocator.m_readyThreads1);
-   
+            m_allocator.m_readyThreads1) *
+        opt(m_excpHandler.m_incoming * opt(m_allocator.m_readyThreads1));
+
     StorageTraceSet pls_memory =
         m_dcache.m_outgoing * opt(m_allocator.m_rmtwr);
 

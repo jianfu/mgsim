@@ -724,13 +724,14 @@ void Processor::Pipeline::ExecuteStage::ExecDebug(double value, Integer stream) 
     }
 }
 
-Processor::Pipeline::ExecuteStage::ExecuteStage(Pipeline& parent, Clock& clock, const ReadExecuteLatch& input, ExecuteMemoryLatch& output, Allocator& alloc, FamilyTable& familyTable, ThreadTable& threadTable, FPU& fpu, size_t fpu_source, Config& /*config*/)
+Processor::Pipeline::ExecuteStage::ExecuteStage(Pipeline& parent, Clock& clock, const ReadExecuteLatch& input, ExecuteMemoryLatch& output, Allocator& alloc, FamilyTable& familyTable, ThreadTable& threadTable, ExceptionTable& excpTable, FPU& fpu, size_t fpu_source, Config& /*config*/)
   : Stage("execute", parent, clock),
     m_input(input),
     m_output(output),
     m_allocator(alloc),
     m_familyTable(familyTable),
     m_threadTable(threadTable),
+    m_excpTable(excpTable),
     m_fpu(fpu),
     m_fpuSource(fpu_source),
     m_flop(0),

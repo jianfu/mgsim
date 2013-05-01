@@ -41,6 +41,10 @@ DEVICE_SRC = \
         arch/dev/UART.cpp
 
 PROCESSOR_SRC = \
+        arch/proc/ExceptionTable.cpp \
+        arch/proc/ExceptionTable.h \
+        arch/proc/ExceptionHandler.cpp \
+        arch/proc/ExceptionHandler.h \
         arch/proc/ActionInterface.cpp \
         arch/proc/ActionInterface.h \
 	arch/proc/Allocator.cpp \
@@ -126,7 +130,7 @@ ZLCOMA_SRC = \
 	arch/mem/zlcoma/Node.h \
 	arch/mem/zlcoma/Node.cpp \
 	arch/mem/zlcoma/RootDirectory.h \
-	arch/mem/zlcoma/RootDirectory.cpp 
+	arch/mem/zlcoma/RootDirectory.cpp
 
 MLCOMA_SRC = \
 	arch/mem/coma/COMA.h \
@@ -138,7 +142,7 @@ MLCOMA_SRC = \
 	arch/mem/coma/Node.h \
 	arch/mem/coma/Node.cpp \
 	arch/mem/coma/RootDirectory.h \
-	arch/mem/coma/RootDirectory.cpp 
+	arch/mem/coma/RootDirectory.cpp
 
 EXTRA_DIST += \
 	arch/proc/ISA.mips.cpp \

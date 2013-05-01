@@ -31,6 +31,8 @@ public:
 #include "IOInterface.h"
 #include "DebugChannel.h"
 #include "DCache.h"
+#include "ExceptionTable.h"
+#include "ExceptionHandler.h"
 #include "Pipeline.h"
 #include "RAUnit.h"
 #include "Allocator.h"
@@ -130,6 +132,8 @@ private:
     Allocator             m_allocator;
     ICache                m_icache;
     DCache                m_dcache;
+    ExceptionTable        m_excpTable;
+    ExceptionHandler      m_excpHandler;
     Pipeline              m_pipeline;
     Network               m_network;
 

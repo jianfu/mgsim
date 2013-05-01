@@ -22,13 +22,28 @@ Processor::Pipeline::PipeAction Processor::Pipeline::WritebackStage::OnCycle()
         return PIPE_STALL;
     }
     
-    //FT-BEGIN
+
+    if (m_input.excp)
+    {
+        if (!m_excpHandler.HandleException(m_input.tid, m_input.excp))
+        {
+            DeadlockWrite("F%u/T%u(%llu) %s writeback stall because exception handler busy",
+                          (unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned long long)m_input.logical_index,
+                          m_parent.GetProcessor().GetSymbolTable()[m_input.pc].c_str());
+            return PIPE_STALL;
+        }
+        //TODO: does state need to be cleared here? Or should that be done when
+        //the exception occurs
+    }
+	
+	//FT-BEGIN
     //if current instruction is store and thread.store_ctr is 0
     //then suspend the thread
     if (m_input.suspend == SUSPEND_STORE)
-	return PIPE_CONTINUE;
+		return PIPE_CONTINUE;
     //FT-END
-		
+	
+
     if (m_input.Rrc.type != RemoteMessage::MSG_NONE)
     {	
         // Network activity
@@ -315,7 +330,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::WritebackStage::OnCycle()
         : PIPE_DELAY;       // We still have data to write back next cycle
 }
 
-Processor::Pipeline::WritebackStage::WritebackStage(Pipeline& parent, Clock& clock, const MemoryWritebackLatch& input, RegisterFile& regFile, Allocator& alloc, ThreadTable& threadTable, Network& network, Config& /*config*/)
+Processor::Pipeline::WritebackStage::WritebackStage(Pipeline& parent, Clock& clock, const MemoryWritebackLatch& input, RegisterFile& regFile, Allocator& alloc, ThreadTable& threadTable, Network& network, ExceptionHandler& exceptionHandler, Config& /*config*/)
   : Stage("writeback", parent, clock),
     m_input(input),
     m_stall(false),
@@ -323,6 +338,7 @@ Processor::Pipeline::WritebackStage::WritebackStage(Pipeline& parent, Clock& clo
     m_allocator(alloc),
     m_threadTable(threadTable),
     m_network(network),
+    m_excpHandler(exceptionHandler),
     m_writebackOffset(-1)
 {
 }

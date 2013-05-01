@@ -150,6 +150,24 @@ enum AllocationType
     ALLOCATE_SINGLE,        ///< Allocate a single context on the first core in the place
 };
 
+/// Currently active exceptions as bit-mask
+typedef unsigned Excp;
+enum
+{
+    EXCP_NONE                 = 0,
+    EXCP_BREAKPOINT           = (1u << 0),
+    EXCP_ARITH_DIVIDE         = (1u << 1),
+    EXCP_ARITH_OVERFLOW       = (1u << 2),
+    EXCP_INVALID_OPCODE       = (1u << 3),
+    EXCP_ICACHE_READ          = (1u << 4),
+    EXCP_INVALID_REGISTER     = (1u << 5),
+    EXCP_UNALIGNED_MEM_ACCESS = (1u << 6),
+    EXCP_INVALID_MEM_ADDR     = (1u << 7),
+    EXCP_MEM_ACCESS_VIOLATION = (1u << 8),
+    EXCP_TLB_MISS             = (1u << 9),
+    EXCP_FPU                  = (1u << 10),
+};
+
 /// An FP value that can be of different sizes
 struct MultiFloat
 {

@@ -70,10 +70,12 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
     /// Type of thread suspension
     enum SuspendType
     {
-        SUSPEND_NONE,           ///< Don't suspend
-        SUSPEND_MEMORY_BARRIER, ///< Memory barrier
-        SUSPEND_MISSING_DATA,   ///< We're missing data
-	SUSPEND_STORE,          ///< used for specify a store when thread.store_ctr is 0 [FT]
+        SUSPEND_NONE,              ///< Don't suspend
+        SUSPEND_MEMORY_BARRIER,    ///< Memory barrier
+        SUSPEND_MISSING_DATA,      ///< We're missing data
+		SUSPEND_STORE,          ///< used for specify a store when thread.store_ctr is 0 [FT]
+        SUSPEND_EXCEPTION,         ///< Exception occurred, waiting for handler
+        SUSPEND_WAITING_EXCEPTION, ///< Handler waiting for an exception to occur
     };
 
     struct RegInfo
@@ -105,13 +107,14 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
         LFID    fid;
         bool    swch;
         bool    kill;
+        Excp    excp;
 
         // Admin (debugging, traces)
         MemAddr      pc_dbg;        // Original, unmodified PC for debugging (execute can change the pc)
         const char*  pc_sym;        // Symbolic name for PC
         uint64_t     logical_index; // Thread logical index
 
-        CommonData() : pc(0), tid(0), fid(0), swch(false), kill(false), pc_dbg(0), pc_sym(NULL), logical_index(0) {}
+        CommonData() : pc(0), tid(0), fid(0), swch(false), kill(false), excp(0), pc_dbg(0), pc_sym(NULL), logical_index(0) {}
         CommonData(const CommonData&) = default;
         CommonData& operator=(const CommonData&) = default;
         virtual ~CommonData() {}
@@ -339,6 +342,7 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
         Allocator&              m_allocator;
         FamilyTable&            m_familyTable;
         ThreadTable&            m_threadTable;
+        ExceptionTable&         m_excpTable;
         FPU&                    m_fpu;
         size_t                  m_fpuSource;    // Which input are we to the FPU?
         uint64_t                m_flop;         // FP operations
@@ -393,7 +397,7 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
     public:
         size_t GetFPUSource() const { return m_fpuSource; }
 
-        ExecuteStage(Pipeline& parent, Clock& clock, const ReadExecuteLatch& input, ExecuteMemoryLatch& output, Allocator& allocator, FamilyTable& familyTable, ThreadTable& threadTable, FPU& fpu, size_t fpu_source, Config& config);
+        ExecuteStage(Pipeline& parent, Clock& clock, const ReadExecuteLatch& input, ExecuteMemoryLatch& output, Allocator& allocator, FamilyTable& familyTable, ThreadTable& threadTable, ExceptionTable& excpTable, FPU& fpu, size_t fpu_source, Config& config);
 
         uint64_t getFlop() const { return m_flop; }
         uint64_t getOp()   const { return m_op; }
@@ -437,18 +441,19 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
         Allocator&                  m_allocator;
         ThreadTable&                m_threadTable;
         Network&                    m_network;
+        ExceptionHandler&           m_excpHandler;
         int                         m_writebackOffset; // For multiple-cycle writebacks
 
         PipeAction OnCycle();
     public:
-        WritebackStage(Pipeline& parent, Clock& clock, const MemoryWritebackLatch& input, RegisterFile& regFile, Allocator& allocator, ThreadTable& threadTable, Network& network, Config& config);
+        WritebackStage(Pipeline& parent, Clock& clock, const MemoryWritebackLatch& input, RegisterFile& regFile, Allocator& allocator, ThreadTable& threadTable, Network& network, ExceptionHandler& exceptionHandler, Config& config);
     };
 
     void PrintLatchCommon(std::ostream& out, const CommonData& latch) const;
     static std::string MakePipeValue(const RegType& type, const PipeValue& value);
 
 public:
-    Pipeline(const std::string& name, Processor& parent, Clock& clock, RegisterFile& regFile, Network& network, Allocator& allocator, FamilyTable& familyTable, ThreadTable& threadTable, ICache& icache, DCache& dcache, FPU& fpu, Config& config);
+    Pipeline(const std::string& name, Processor& parent, Clock& clock, RegisterFile& regFile, Network& network, Allocator& allocator, FamilyTable& familyTable, ThreadTable& threadTable, ICache& icache, DCache& dcache, ExceptionTable& excpTable, ExceptionHandler& excpHandler, FPU& fpu, Config& config);
     Pipeline(const Pipeline&) = delete;
     Pipeline& operator=(const Pipeline&) = delete;
     ~Pipeline();

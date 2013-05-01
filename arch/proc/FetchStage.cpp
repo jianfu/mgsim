@@ -117,6 +117,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::FetchStage::OnCycle()
         // Fill output latch structure
         m_output.pc           = pc;
         m_output.instr        = UnserializeInstruction(&instrs[iInstr]);
+        m_output.excp         = 0;
 
         m_output.pc_dbg       = pc;
         if (GetKernel()->GetDebugMode() & Kernel::DEBUG_CPU_MASK)
