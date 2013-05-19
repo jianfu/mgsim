@@ -149,6 +149,7 @@ enum {
     A_UTHREADF_PUTG      = 0x024,
     A_UTHREAD_PUTS       = 0x25,
     A_UTHREADF_PUTS      = 0x025,
+    A_UTHREAD_RPUT       = 0x26,
     A_UTHREAD_DETACH     = 0x28,
 
     //FT-BEGIN
@@ -162,6 +163,7 @@ enum {
     A_UTHREADF_GETG      = 0x032,
     A_UTHREAD_GETS       = 0x33,
     A_UTHREADF_GETS      = 0x033,
+    A_UTHREAD_RGET       = 0x34,
 
     /* remote, res mgt. */
     A_UTHREAD_ALLOC_MASK  = 0x60,

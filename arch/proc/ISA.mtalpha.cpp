@@ -1182,6 +1182,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                 case A_UTHREAD_SETLIMIT: return SetFamilyProperty(fid, FAMPROP_LIMIT, Rbv);
                 case A_UTHREAD_SETSTEP:  return SetFamilyProperty(fid, FAMPROP_STEP,  Rbv);
                 case A_UTHREAD_SETBLOCK: return SetFamilyProperty(fid, FAMPROP_BLOCK, Rbv);
+
                 case A_UTHREAD_PUTG:     return WriteFamilyRegister(RRT_GLOBAL,          RT_INTEGER, fid, m_input.regofs); 
                 case A_UTHREAD_PUTS:     return WriteFamilyRegister(RRT_FIRST_DEPENDENT, RT_INTEGER, fid, m_input.regofs); 
                 case A_UTHREAD_DETACH:   return ExecDetach(fid); 
@@ -1191,9 +1192,45 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                 case A_UTHREAD_RMTWR:    return ExecRmtwr(fid);
                 //FT-END
 
+                case A_UTHREAD_RPUT:
+                {
+                    // Ra contains both vtid and field. Field in lower 16 bits,
+                    // remaining bits are for vtid.
+                    ThreadInspector::field_type field = (ThreadInspector::field_type)(m_input.Rav.m_integer.get(m_input.Rav.m_size) & 0xffff);
+                    unsigned vtid = m_input.Rav.m_integer.get(m_input.Rav.m_size) >> 16;
+                    if (!m_threadInspector.QueuePutOperation(m_input.tid, vtid, field, m_input.Rbv.m_integer.get(m_input.Rbv.m_size)))
+                    {
+                        DeadlockWrite("F%u/T%u(%llu) %s unable to queue RPUT operation",
+                                    (unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned long long)m_input.logical_index, m_input.pc_sym);
+
+                        return PIPE_STALL;
+                    }
+                    break;
+                }
+
                 case A_UTHREAD_SYNC:     return ExecSync(fid);
                 case A_UTHREAD_GETG:     return ReadFamilyRegister(RRT_GLOBAL,      RT_INTEGER, fid, m_input.regofs);
                 case A_UTHREAD_GETS:     return ReadFamilyRegister(RRT_LAST_SHARED, RT_INTEGER, fid, m_input.regofs);
+                case A_UTHREAD_RGET:
+                {
+                    if (!m_threadInspector.QueueGetOperation(m_input.tid,
+                        (ThreadInspector::field_type)m_input.Rav.m_integer.get(m_input.Rav.m_size),
+                        (ThreadInspector::field_type)m_input.Rbv.m_integer.get(m_input.Rbv.m_size),
+                        m_input.Rc))
+                    {
+                        DeadlockWrite("F%u/T%u(%llu) %s unable to queue RPUT operation for %s",
+                                    (unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned long long)m_input.logical_index, m_input.pc_sym,
+                                    m_input.Rc.str().c_str());
+
+                        return PIPE_STALL;
+                    }
+
+                    COMMIT
+                    {
+                        m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_output.Rcv.m_size);
+                    }
+                    break;
+                }
                 }
             }
             else if ((m_input.function & A_UTHREAD_ALLOC_MASK) == A_UTHREAD_ALLOC_VALUE)

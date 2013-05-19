@@ -45,6 +45,8 @@ PROCESSOR_SRC = \
         arch/proc/ExceptionTable.h \
         arch/proc/ExceptionHandler.cpp \
         arch/proc/ExceptionHandler.h \
+        arch/proc/ThreadInspector.cpp \
+        arch/proc/ThreadInspector.h \
         arch/proc/ActionInterface.cpp \
         arch/proc/ActionInterface.h \
 	arch/proc/Allocator.cpp \

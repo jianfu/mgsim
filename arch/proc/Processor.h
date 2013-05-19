@@ -33,6 +33,7 @@ public:
 #include "DCache.h"
 #include "ExceptionTable.h"
 #include "ExceptionHandler.h"
+#include "ThreadInspector.h"
 #include "Pipeline.h"
 #include "RAUnit.h"
 #include "Allocator.h"
@@ -134,6 +135,7 @@ private:
     DCache                m_dcache;
     ExceptionTable        m_excpTable;
     ExceptionHandler      m_excpHandler;
+    ThreadInspector       m_threadInspector;
     Pipeline              m_pipeline;
     Network               m_network;
 

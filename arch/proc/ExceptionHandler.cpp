@@ -26,9 +26,7 @@ Processor::ExceptionHandler::ExceptionHandler(const std::string& name, Processor
 
     p_NewException.SetStorageTraces(opt(m_incoming));
 
-    //m_completed.Sensitive(p_CompletedReads);
     m_incoming.Sensitive(p_NewException);
-    //m_outgoing.Sensitive(p_Outgoing);
 }
 
 Result Processor::ExceptionHandler::DoIncomingException()
@@ -38,7 +36,7 @@ Result Processor::ExceptionHandler::DoIncomingException()
     const TID htid = m_excpTable[e.tid].handler;
     COMMIT
     {
-        fprintf(stderr, "New exception in T%u: %u (HT%u)\n", e.tid, e.excp, htid);
+        DebugSimWrite("New exception in T%u: %u (HT%u)", e.tid, e.excp, htid);
         m_excpTable[e.tid].excp |= e.excp;
         m_excpTable.HasNewException(e.tid);
     }

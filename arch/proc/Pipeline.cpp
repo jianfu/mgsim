@@ -32,6 +32,7 @@ Processor::Pipeline::Pipeline(
     DCache&             dcache,
     ExceptionTable&     excpTable,
     ExceptionHandler&   excpHandler,
+    ThreadInspector&    threadInspector,
     FPU&                fpu,
     Config&       config)
 :
@@ -84,7 +85,7 @@ Processor::Pipeline::Pipeline(
 
     // Create the Execute stage
     size_t fpu_client_id = fpu.RegisterSource(regFile, alloc.m_readyThreads2);
-    m_stages[3].stage  = new ExecuteStage(*this, clock, m_reLatch, m_emLatch, alloc, familyTable, threadTable, excpTable, fpu, fpu_client_id, config);
+    m_stages[3].stage  = new ExecuteStage(*this, clock, m_reLatch, m_emLatch, alloc, familyTable, threadTable, excpTable, threadInspector, fpu, fpu_client_id, config);
     m_stages[3].input  = &m_reLatch;
     m_stages[3].output = &m_emLatch;
     bypasses.push_back(BypassInfo(m_emLatch.empty, m_emLatch.Rc, m_emLatch.Rcv));
