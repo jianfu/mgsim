@@ -15,17 +15,17 @@ private:
         F_HTID                 = 0,
         F_EXCP                 = 1,
         F_PC                   = 2,
-        F_NUM_REGS             = 3,
-        F_NUM_FP_REGS          = 4,
-        F_FID                  = 5,
-        F_SUSPENDED            = 6,
-        F_TERMINATED           = 7,
-        F_FAMILY_TERMINATED    = 8,
-        F_REGISTERS            = 0x100,
-        F_FP_REGISTERS         = 0x500,
-        F_REGISTER_STATUSES    = 0x900,
-        F_FP_REGISTER_STATUSES = 0xd00,
-        F_STATUS_WORDS         = 0x1100,
+        F_NUM_REGS             = 3,      // Read-only
+        F_NUM_FP_REGS          = 4,      // Read-only
+        F_FID                  = 5,      // Read-only
+        F_SUSPENDED            = 6,      // Write-only
+        F_TERMINATED           = 7,      // Write-only
+        F_FAMILY_TERMINATED    = 8,      // Write-only
+        F_REGISTERS            = 0x100,  // reg n = F_REGISTERS + n
+        F_FP_REGISTERS         = 0x500,  // reg n = F_FP_REGISTERS + n
+        F_REGISTER_STATUSES    = 0x900,  // reg n = F_REGISTER_STATUSES + n
+        F_FP_REGISTER_STATUSES = 0xd00,  // reg n = F_FP_REGISTER_STATUSES + n
+        F_STATUS_WORDS         = 0x1100, // word n = F_STATUS_WORDS + n
     };
     enum OpType
     {

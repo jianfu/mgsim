@@ -71,49 +71,86 @@ Result Processor::ThreadInspector::DoIncomingOperation()
                 data = FID;
                 break;
             case F_SUSPENDED:
+                // Not implemented
                 return FAILED;
             case F_TERMINATED:
+                // Not implemented
                 return FAILED;
             case F_FAMILY_TERMINATED:
+                // Not implemented
                 return FAILED;
             default:
             {
                 if (op.field >= F_STATUS_WORDS)
-                    return FAILED;
-                else if (op.field >= F_FP_REGISTER_STATUSES)
-                    return FAILED;
-                else if (op.field >= F_REGISTER_STATUSES)
-                    return FAILED;
-                else if (op.field >= F_FP_REGISTERS)
-                    return FAILED;
+                    switch (op.field - F_STATUS_WORDS)
+                    {
+#if defined(TARGET_MTALPHA)
+                        case 0: data = m_threadTable[op.vtid].fpcr; break;
+#elif defined(TARGET_MTSPARC)
+                        case 0: data = m_threadTable[op.vtid].psr; break;
+                        case 1: data = m_threadTable[op.vtid].fsr; break;
+                        case 2: data = m_threadTable[op.vtid].Y; break;
+#elif defined(TARGET_MIPS32) || defined(TARGET_MIPS32EL)
+                        case 0: data = m_threadTable[op.vtid].LO; break;
+                        case 1: data = m_threadTable[op.vtid].HI; break;
+#endif
+                        default: fprintf(stderr, "Unknown status word %x\n", op.field - F_STATUS_WORDS);
+                    }
                 else if (op.field >= F_REGISTERS)
                 {
                     // Calculate the real index of the register, inside the
                     // register file.
                     // Processor::Pipeline::DecodeStage::TranslateRegister...
 
-                    Family::RegInfo fri = m_familyTable[FID].regs[RT_INTEGER];
-                    Thread::RegInfo tri = m_threadTable[op.vtid].regs[RT_INTEGER];
+                    RegType type;
+                    RegIndex index;
+                    bool returnStatus = false;
+                    if (op.field >= F_FP_REGISTER_STATUSES)
+                    {
+                        type = RT_FLOAT;
+                        index = op.field - F_FP_REGISTER_STATUSES;
+                        returnStatus = true;
+                    }
+                    else if (op.field >= F_REGISTER_STATUSES)
+                    {
+                        type = RT_INTEGER;
+                        index = op.field - F_REGISTER_STATUSES;
+                        returnStatus = true;
+                    }
+                    else if (op.field >= F_FP_REGISTERS)
+                    {
+                        type = RT_FLOAT;
+                        index = op.field - F_FP_REGISTERS;
+                    }
+                    else
+                    {
+                        type = RT_INTEGER;
+                        index = op.field - F_REGISTERS;
+                    }
+
+
+                    Family::RegInfo fri = m_familyTable[FID].regs[type];
+                    Thread::RegInfo tri = m_threadTable[op.vtid].regs[type];
 
                     RegAddr reg;
                     RegClass rc;
-                    unsigned char regi = GetRegisterClass(op.field - F_REGISTERS, fri.count, &rc, RT_INTEGER);
+                    unsigned char regi = GetRegisterClass(index, fri.count, &rc, type);
                     switch (rc)
                     {
                         case RC_GLOBAL:
-                            reg = MAKE_REGADDR(RT_INTEGER, fri.base + fri.size - fri.count.globals + regi);
+                            reg = MAKE_REGADDR(type, fri.base + fri.size - fri.count.globals + regi);
                             break;
                         case RC_SHARED:
-                            reg = MAKE_REGADDR(RT_INTEGER, tri.shareds + regi);
+                            reg = MAKE_REGADDR(type, tri.shareds + regi);
                             break;
                         case RC_LOCAL:
-                            reg = MAKE_REGADDR(RT_INTEGER, tri.locals + regi);
+                            reg = MAKE_REGADDR(type, tri.locals + regi);
                             break;
                         case RC_DEPENDENT:
-                            reg = MAKE_REGADDR(RT_INTEGER, tri.dependents + regi);
+                            reg = MAKE_REGADDR(type, tri.dependents + regi);
                             break;
                         default:
-                            reg = MAKE_REGADDR(RT_INTEGER, INVALID_REG_INDEX);
+                            reg = MAKE_REGADDR(type, INVALID_REG_INDEX);
                     }
 
                     if (reg.index == INVALID_REG_INDEX)
@@ -138,7 +175,16 @@ Result Processor::ThreadInspector::DoIncomingOperation()
                         return FAILED;
                     }
 
-                    data = value.m_integer;
+                    if (returnStatus)
+                        data = value.m_state;
+                    else
+                    {
+                        if (type == RT_INTEGER)
+                            data = value.m_integer;
+                        else
+                            data = value.m_float.integer;
+                    }
+
                 }
                 else
                 {
@@ -225,18 +271,113 @@ Result Processor::ThreadInspector::DoIncomingOperation()
                     m_allocator.KillThread(op.vtid);
                 break;
             case F_FAMILY_TERMINATED:
+                // TODO
                 return FAILED;
             default:
             {
-                if (op.field > F_STATUS_WORDS)
+                if (op.field >= F_STATUS_WORDS)
+                    switch (op.field - F_STATUS_WORDS)
+                    {
+#if defined(TARGET_MTALPHA)
+                        case 0: m_threadTable[op.vtid].fpcr = op.value; break;
+#elif defined(TARGET_MTSPARC)
+                        case 0: m_threadTable[op.vtid].psr = op.value; break;
+                        case 1: m_threadTable[op.vtid].fsr = op.value; break;
+                        case 2: m_threadTable[op.vtid].Y = op.value; break;
+#elif defined(TARGET_MIPS32) || defined(TARGET_MIPS32EL)
+                        case 0: m_threadTable[op.vtid].LO = op.value; break;
+                        case 1: m_threadTable[op.vtid].HI = op.value; break;
+#endif
+                        default: fprintf(stderr, "Unknown status word %x\n", op.field - F_STATUS_WORDS);
+                    }
+                else if (op.field >= F_FP_REGISTER_STATUSES)
                     return FAILED;
-                else if (op.field > F_REGISTER_STATUSES)
+                else if (op.field >= F_REGISTER_STATUSES)
                     return FAILED;
-                else if (op.field > F_REGISTERS)
-                    return FAILED;
+                else if (op.field >= F_REGISTERS)
+                {
+                    RegType type;
+                    RegIndex index;
+                    if (op.field >= F_FP_REGISTERS)
+                    {
+                        type = RT_FLOAT;
+                        index = op.field - F_FP_REGISTERS;
+                    }
+                    else
+                    {
+                        type = RT_INTEGER;
+                        index = op.field - F_REGISTERS;
+                    }
+
+
+                    Family::RegInfo fri = m_familyTable[FID].regs[type];
+                    Thread::RegInfo tri = m_threadTable[op.vtid].regs[type];
+
+                    RegAddr reg;
+                    RegClass rc;
+                    unsigned char regi = GetRegisterClass(index, fri.count, &rc, type);
+                    switch (rc)
+                    {
+                        case RC_GLOBAL:
+                            reg = MAKE_REGADDR(type, fri.base + fri.size - fri.count.globals + regi);
+                            break;
+                        case RC_SHARED:
+                            reg = MAKE_REGADDR(type, tri.shareds + regi);
+                            break;
+                        case RC_LOCAL:
+                            reg = MAKE_REGADDR(type, tri.locals + regi);
+                            break;
+                        case RC_DEPENDENT:
+                            reg = MAKE_REGADDR(type, tri.dependents + regi);
+                            break;
+                        default:
+                            reg = MAKE_REGADDR(type, INVALID_REG_INDEX);
+                    }
+
+                    if (reg.index == INVALID_REG_INDEX)
+                    {
+                        // Probably read-as-zero
+                        break;
+                    }
+
+                    // Acquire (read/)write access
+                    if (!m_regFile.p_asyncW.Write(reg))
+                    {
+                        DeadlockWrite("Unable to acquire port for writing register %s", reg.str().c_str());
+                        return FAILED;
+                    }
+
+                    // Read current state of register
+                    RegValue value;
+                    if (!m_regFile.ReadRegister(reg, value))
+                    {
+                        DeadlockWrite("Unable to read register %s", reg.str().c_str());
+                        return FAILED;
+                    }
+
+                    // We can only write our result if the register may not be
+                    // overwritten later on
+                    if (value.m_state != RST_FULL)
+                    {
+                        DeadlockWrite("Register %s not full", reg.str().c_str());
+                        return FAILED;
+                    }
+
+                    // Now we know we can write to the register. Prepare it and issue write
+                    // to register file.
+                    RegValue regv;
+                    regv.m_state = RST_FULL;
+                    regv.m_integer = op.value;
+
+                    if (!m_regFile.WriteRegister(reg, regv, true))
+                    {
+                        DeadlockWrite("Unable to write register %s", reg.str().c_str());
+                        return FAILED;
+                    }
+                }
                 else
                 {
-                    fprintf(stderr, "INVALID FIELD!!\n");
+                    fprintf(stderr, "INVALID FIELD!! %x\n", op.field);
                     // Meh?
                     m_incoming.Pop();
                     return SUCCESS;
