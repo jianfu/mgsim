@@ -102,7 +102,27 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::OnCycle()
     // Check for breakpoints
     GetKernel()->GetBreakPointManager().Check(BreakPointManager::EXEC, m_input.pc, *this);
 
-    PipeAction action = ExecuteInstruction();
+    PipeAction action;
+    try
+    {
+        action = ExecuteInstruction();
+    }
+    catch (SimulationException& e)
+    {
+        if (e.GetExcp() == EXCP_NONE)
+            throw e;
+        else
+        {
+            //fprintf(stderr, "Caught exception in T%u @ %x: %u\n", m_output.tid, e.GetPC(), e.GetExcp());
+            action = PIPE_FLUSH;
+            COMMIT
+            {
+                m_output.Rc = INVALID_REG;
+                m_output.excp |= e.GetExcp();
+                m_output.suspend = SUSPEND_EXCEPTION;
+            }
+        }
+    }
     if (action != PIPE_STALL)
     {
         // Operation succeeded

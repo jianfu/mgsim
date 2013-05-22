@@ -23,13 +23,16 @@ class SimulationException : public std::runtime_error
 {
     std::list<std::string> m_details;
     unsigned long long     m_pc;
+    unsigned               m_excp;
 public:
     const std::list<std::string>& GetDetails() const { return m_details; }
     unsigned long long GetPC() const { return m_pc; }
     void SetPC(unsigned long long pc) { m_pc = pc; }
+    unsigned GetExcp() const { return m_excp; }
+    void SetExcp(unsigned excp) { m_excp = excp; }
 
     void AddDetails(const std::string& msg) { m_details.push_back(msg); }
-    SimulationException(const std::string& msg) : std::runtime_error(msg), m_details(), m_pc(0) {}
+    SimulationException(const std::string& msg) : std::runtime_error(msg), m_details(), m_pc(0), m_excp(0) {}
     SimulationException(const std::string& msg, const Object& object);
     SimulationException(const Object& object, const std::string& msg);
     virtual ~SimulationException() throw() {}
@@ -81,7 +84,7 @@ class ProgramTerminationException : public SimulationException
 public:
     bool TerminateWithAbort() const { return m_abort; }
     int GetExitCode() const { return m_exitcode; }
-    ProgramTerminationException(const Object& object, const std::string& msg, int exitcode, bool abort) 
+    ProgramTerminationException(const Object& object, const std::string& msg, int exitcode, bool abort)
         : SimulationException(msg, object), m_exitcode(exitcode), m_abort(abort) {}
 };
 

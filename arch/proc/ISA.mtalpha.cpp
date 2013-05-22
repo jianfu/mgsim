@@ -527,7 +527,7 @@ bool Processor::Pipeline::ExecuteStage::ExecuteINTM(PipeValue& Rcv, const PipeVa
         case A_INTMFUNC_MULQ_V:
         case A_INTMFUNC_MULQ:  mul128b(Ra, Rb, NULL, &Rc); break;
         case A_INTMFUNC_UMULH: mul128b(Ra, Rb, &Rc, NULL); break;
-#define CHECKDIV0(X) if ((X) == 0) ThrowIllegalInstructionException(*this, m_input.pc, "Division by zero")
+#define CHECKDIV0(X) if ((X) == 0) ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_ARITH_DIVIDE, "Division by zero")
         case A_INTMFUNC_DIVL:  CHECKDIV0((int32_t)Rb);  Rc = (int64_t)(int32_t)((int32_t)Ra / (int32_t)Rb); break;
         case A_INTMFUNC_DIVQ:  CHECKDIV0((int64_t)Rb);  Rc = (int64_t)Ra / (int64_t)Rb; break;
         case A_INTMFUNC_UDIVL: CHECKDIV0((uint32_t)Rb); Rc = (uint64_t)(uint32_t)((uint32_t)Ra / (uint32_t)Rb); break;
@@ -1161,13 +1161,9 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
 
                     case A_UTHREAD_BREAK:  m_output.Rc = INVALID_REG;  ExecBreak(); break;
                     case A_UTHREAD_TRAP:
-                        m_output.Rc = INVALID_REG;
-                        m_output.excp |= EXCP_BREAKPOINT;
-                        m_output.swch = true;
-                        m_output.suspend = SUSPEND_EXCEPTION;
-                        return PIPE_FLUSH;
+                        ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_BREAKPOINT, "Software breakpoint");
                     case A_UTHREAD_PRINT: m_output.Rc = INVALID_REG; ExecDebug(Rav, Rbv); break;
-                    }
+                }
                 }
             }
             else if ((m_input.function & A_UTHREAD_REMOTE_MASK) == A_UTHREAD_REMOTE_VALUE)

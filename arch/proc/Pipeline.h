@@ -461,10 +461,14 @@ public:
 
     Result DoPipeline();
 
-#define ThrowIllegalInstructionException(Obj, PC, ...)             \
+#define ThrowIllegalInstructionException(Obj, PC, ...)                  \
+    ThrowIllegalInstructionExceptionWithExcp(Obj, PC, EXCP_NONE, __VA_ARGS__)
+
+#define ThrowIllegalInstructionExceptionWithExcp(Obj, PC, Excp, ...)    \
     do {                                                                \
         auto ex = exceptf<IllegalInstructionException>(Obj, "Illegal instruction: " __VA_ARGS__); \
         ex.SetPC(PC);                                                   \
+        ex.SetExcp(Excp);                                               \
         throw ex;                                                       \
     } while(0)
 
