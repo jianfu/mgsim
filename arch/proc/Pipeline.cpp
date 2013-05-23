@@ -117,7 +117,7 @@ Processor::Pipeline::Pipeline(
     }
 
     // Create the Writeback stage
-    m_stages.back().stage  = new WritebackStage(*this, clock, *last_output, regFile, alloc, threadTable, network, excpHandler, config);
+    m_stages.back().stage  = new WritebackStage(*this, clock, *last_output, regFile, alloc, threadTable, network, excpHandler, excpTable, config);
     m_stages.back().input  = m_stages[m_stages.size() - 2].output;
     m_stages.back().output = NULL;
     bypasses.push_back(BypassInfo(m_mwBypass.empty, m_mwBypass.Rc, m_mwBypass.Rcv));

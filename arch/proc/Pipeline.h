@@ -443,11 +443,12 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
         ThreadTable&                m_threadTable;
         Network&                    m_network;
         ExceptionHandler&           m_excpHandler;
+        ExceptionTable&             m_excpTable;
         int                         m_writebackOffset; // For multiple-cycle writebacks
 
         PipeAction OnCycle();
     public:
-        WritebackStage(Pipeline& parent, Clock& clock, const MemoryWritebackLatch& input, RegisterFile& regFile, Allocator& allocator, ThreadTable& threadTable, Network& network, ExceptionHandler& exceptionHandler, Config& config);
+        WritebackStage(Pipeline& parent, Clock& clock, const MemoryWritebackLatch& input, RegisterFile& regFile, Allocator& allocator, ThreadTable& threadTable, Network& network, ExceptionHandler& excpHandler, ExceptionTable& excpTable, Config& config);
     };
 
     void PrintLatchCommon(std::ostream& out, const CommonData& latch) const;

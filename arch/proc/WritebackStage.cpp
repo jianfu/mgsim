@@ -9,8 +9,9 @@ Processor::Pipeline::PipeAction Processor::Pipeline::WritebackStage::OnCycle()
     int  writebackOffset  = m_writebackOffset;
     int  size             = -1;
     bool allow_reschedule = true;
-    bool suspend          = (m_input.suspend != SUSPEND_NONE);        
-    
+    bool suspend          = (m_input.suspend != SUSPEND_NONE);
+    MemAddr pc            = m_input.pc;
+
     if (m_stall)
     {
         // We need to stall this cycle without doing *anything*.
@@ -261,6 +262,43 @@ Processor::Pipeline::PipeAction Processor::Pipeline::WritebackStage::OnCycle()
                        suspend ? "yes" : "no");
 
     }
+    else if (m_input.suspend == SUSPEND_WAITING_EXCEPTION)
+    {
+        // In order to prevent race conditions, verify these conclusions from
+        // the execute stage. If there has been an exception, don't suspend the
+        // thread. Otherwise, the exception may wake this thread before it
+        // actually suspends.
+        assert(m_input.swch == true);
+        TID victim;
+        if (!m_excpTable.PeekVictimThread(m_input.tid, victim))
+        {
+            DeadlockWrite("Unable to request victim thread from exception table.");
+            return PIPE_STALL;
+        }
+
+        if (victim != INVALID_TID)
+        {
+            // We cannot fill Rc here anymore, so we just reschedule this chkex.
+            suspend = false;
+            allow_reschedule = true;
+            pc -= sizeof(Instruction);
+        }
+        else
+        {
+            // Only now it is safe to reschule this thread from the exception
+            // handler.
+
+            if (!m_excpTable.p_readwrite.Invoke())
+            {
+                DeadlockWrite("Unable to acquire write access to exception table.");
+                return PIPE_STALL;
+            }
+            COMMIT {
+                m_excpTable[m_input.tid].chkexWaiting = true;
+            }
+        }
+
+    }
 
     if (writebackOffset == size)
     {
@@ -330,7 +368,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::WritebackStage::OnCycle()
         : PIPE_DELAY;       // We still have data to write back next cycle
 }
 
-Processor::Pipeline::WritebackStage::WritebackStage(Pipeline& parent, Clock& clock, const MemoryWritebackLatch& input, RegisterFile& regFile, Allocator& alloc, ThreadTable& threadTable, Network& network, ExceptionHandler& exceptionHandler, Config& /*config*/)
+Processor::Pipeline::WritebackStage::WritebackStage(Pipeline& parent, Clock& clock, const MemoryWritebackLatch& input, RegisterFile& regFile, Allocator& alloc, ThreadTable& threadTable, Network& network, ExceptionHandler& excpHandler, ExceptionTable& excpTable, Config& /*config*/)
   : Stage("writeback", parent, clock),
     m_input(input),
     m_stall(false),
@@ -338,7 +376,8 @@ Processor::Pipeline::WritebackStage::WritebackStage(Pipeline& parent, Clock& clo
     m_allocator(alloc),
     m_threadTable(threadTable),
     m_network(network),
-    m_excpHandler(exceptionHandler),
+    m_excpHandler(excpHandler),
+    m_excpTable(excpTable),
     m_writebackOffset(-1)
 {
 }

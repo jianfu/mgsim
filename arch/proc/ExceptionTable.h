@@ -29,8 +29,12 @@ public:
           ExceptionInfo& operator[](TID index)       { return m_excp[index]; }
     const ExceptionInfo& operator[](TID index) const { return m_excp[index]; }
 
-    void HasNewException(TID victim);
-    TID GetVictimThread(TID handler);
+    bool HasNewException(TID victim);
+    bool PopVictimThread(TID handler, TID& victim);
+    bool PeekVictimThread(TID handler, TID& victim);
+
+    ArbitratedService<> p_readwrite;
+    ArbitratedService<> p_activeHandlerTable;
 
     void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const;
     void Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const;

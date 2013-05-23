@@ -1099,71 +1099,86 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
         {
             if ((m_input.function & A_UTHREAD_LOCAL_MASK) == A_UTHREAD_LOCAL_VALUE)
             {
-                COMMIT { //TODO: this probably won't work, due to the PIPE_FLUSH return?
-                    switch (m_input.function)
-                    {
-                    case A_UTHREAD_LDBP:
+                switch (m_input.function)
+                {
+                case A_UTHREAD_LDBP:
+                    COMMIT {
                         m_output.Rcv.m_state = RST_FULL;
                         m_output.Rcv.m_integer = m_parent.GetProcessor().GetTLSAddress(m_input.fid, m_input.tid);
-                        break;
-                    case A_UTHREAD_LDFP:
-                    {
-                        m_output.Rcv.m_state = RST_FULL;
-                        const MemAddr tls_base = m_parent.GetProcessor().GetTLSAddress(m_input.fid, m_input.tid);
-                        const MemAddr tls_size = m_parent.GetProcessor().GetTLSSize();
-                        m_output.Rcv.m_integer = tls_base + tls_size;
-                        break;
                     }
-                    case A_UTHREAD_GETFID: m_output.Rcv.m_state = RST_FULL; m_output.Rcv.m_integer = m_input.fid; break;
-                    case A_UTHREAD_GETTID: m_output.Rcv.m_state = RST_FULL; m_output.Rcv.m_integer = m_input.tid; break;
-                    case A_UTHREAD_GETCID: m_output.Rcv.m_state = RST_FULL; m_output.Rcv.m_integer = m_parent.GetProcessor().GetPID(); break;
-                    case A_UTHREAD_GETPID:
-                    {
-                        m_output.Rcv.m_state = RST_FULL;
-                        PlaceID place;
-                        place.size = m_input.placeSize;
-
-                        //FT-BEGIN
-                        Family& family = m_familyTable[m_input.fid];
-                        if ( place.size == 1 && family.redundant && family.ftmode)//return the master's PID for reundant family when size is 1
-                            place.pid  = m_parent.GetProcessor().GetPID() + 1 - (m_parent.GetProcessor().GetPID()%2)*2;
-                        else 
+                    break;
+                case A_UTHREAD_LDFP:
+                COMMIT {
+                    m_output.Rcv.m_state = RST_FULL;
+                    const MemAddr tls_base = m_parent.GetProcessor().GetTLSAddress(m_input.fid, m_input.tid);
+                    const MemAddr tls_size = m_parent.GetProcessor().GetTLSSize();
+                    m_output.Rcv.m_integer = tls_base + tls_size;
+                    break;
+                }
+                case A_UTHREAD_GETFID: COMMIT { m_output.Rcv.m_state = RST_FULL; m_output.Rcv.m_integer = m_input.fid; } break;
+                case A_UTHREAD_GETTID: COMMIT { m_output.Rcv.m_state = RST_FULL; m_output.Rcv.m_integer = m_input.tid; } break;
+                case A_UTHREAD_GETCID: COMMIT { m_output.Rcv.m_state = RST_FULL; m_output.Rcv.m_integer = m_parent.GetProcessor().GetPID(); } break;
+                case A_UTHREAD_GETPID:
+                COMMIT {
+                    m_output.Rcv.m_state = RST_FULL;
+                    PlaceID place;
+                    place.size = m_input.placeSize;
+					
+					//FT-BEGIN
+					Family& family = m_familyTable[m_input.fid];
+					if ( place.size == 1 && family.redundant && family.ftmode)//return the master's PID for reundant family when size is 1
+						place.pid  = m_parent.GetProcessor().GetPID() + 1 - (m_parent.GetProcessor().GetPID()%2)*2;
+					else 
                         //FT-END
-                            place.pid  = m_parent.GetProcessor().GetPID() & -place.size;
-                        
-                        place.capability = 0x1337; // later: find a proper substitute
-                        m_output.Rcv.m_integer = m_parent.GetProcessor().PackPlace(place);
-                        break;
-                    }
-                    case A_UTHREAD_GETASR: m_output.Rcv.m_state = RST_FULL; m_output.Rcv.m_integer = m_parent.GetProcessor().ReadASR(Rbv); break;
-                    case A_UTHREAD_GETAPR: m_output.Rcv.m_state = RST_FULL; m_output.Rcv.m_integer = m_parent.GetProcessor().ReadAPR(Rbv); break;
-                    case A_UTHREAD_CHKEX:
+						place.pid  = m_parent.GetProcessor().GetPID() & -place.size;
+					
+                    place.capability = 0x1337; // later: find a proper substitute
+                    m_output.Rcv.m_integer = m_parent.GetProcessor().PackPlace(place);
+                    break;
+                }
+                case A_UTHREAD_GETASR: COMMIT { m_output.Rcv.m_state = RST_FULL; m_output.Rcv.m_integer = m_parent.GetProcessor().ReadASR(Rbv); } break;
+                case A_UTHREAD_GETAPR: COMMIT { m_output.Rcv.m_state = RST_FULL; m_output.Rcv.m_integer = m_parent.GetProcessor().ReadAPR(Rbv); } break;
+                case A_UTHREAD_CHKEX:
+                {
+                    TID victim;
+                    if (!m_excpTable.PopVictimThread(m_input.tid, victim))
                     {
-                        TID victim = m_excpTable.GetVictimThread(m_input.tid);
-                        if (victim == INVALID_TID)
+                        DeadlockWrite("Unable to request victim thread from exception table.");
+                        return PIPE_STALL;
+                    }
+
+                    if (victim == INVALID_TID)
+                    {
+                        if (!m_excpTable.p_readwrite.Invoke())
                         {
+                            DeadlockWrite("Unable to gain write access to exception table.");
+                            return PIPE_STALL;
+                        }
+
+                        COMMIT {
                             m_output.swch = true;
                             m_output.kill = false;
                             m_output.suspend = SUSPEND_WAITING_EXCEPTION;
                             m_output.pc -= sizeof(Instruction);
-                            m_excpTable[m_input.tid].chkexWaiting = true;
-                            return PIPE_FLUSH;
                         }
-                        else
-                        {
+                        return PIPE_FLUSH;
+                    }
+                    else
+                    {
+                        COMMIT {
                             m_output.Rcv.m_state = RST_FULL;
                             m_output.Rcv.m_integer = victim;
                         }
-                        break;
                     }
-
-                    // Rc unused
-
-                    case A_UTHREAD_BREAK:  m_output.Rc = INVALID_REG;  ExecBreak(); break;
-                    case A_UTHREAD_TRAP:
-                        ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_BREAKPOINT, "Software breakpoint");
-                    case A_UTHREAD_PRINT: m_output.Rc = INVALID_REG; ExecDebug(Rav, Rbv); break;
+                    break;
                 }
+
+                // Rc unused
+
+                case A_UTHREAD_BREAK: COMMIT { m_output.Rc = INVALID_REG; ExecBreak(); } break;
+                case A_UTHREAD_TRAP:
+                    ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_BREAKPOINT, "Software breakpoint");
+                case A_UTHREAD_PRINT: COMMIT { m_output.Rc = INVALID_REG; ExecDebug(Rav, Rbv); } break;
                 }
             }
             else if ((m_input.function & A_UTHREAD_REMOTE_MASK) == A_UTHREAD_REMOTE_VALUE)

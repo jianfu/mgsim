@@ -13,6 +13,8 @@ namespace Simulator
 
 Processor::ExceptionTable::ExceptionTable(const std::string& name, Processor& parent, Clock& clock, Config& config)
   : Object(name, parent, clock),
+    p_readwrite(*this, clock, "p_readwrite"),
+    p_activeHandlerTable(*this, clock, "p_activeHandlerTable"),
     m_excp(config.getValue<size_t>(*this, "NumEntries"))
 {
     for (TID i = 0; i < m_excp.size(); ++i)
@@ -22,28 +24,26 @@ Processor::ExceptionTable::ExceptionTable(const std::string& name, Processor& pa
     }
 }
 
-void Processor::ExceptionTable::HasNewException(TID victim)
+bool Processor::ExceptionTable::HasNewException(TID victim)
 {
+    if (!p_activeHandlerTable.Invoke())
+    {
+        DeadlockWrite("Unable to acquire active handler table for write access");
+        return false;
+    }
+
     COMMIT {
         m_excp[victim].activeExcp = true;
     }
+
+    return true;
 }
 
-TID Processor::ExceptionTable::GetVictimThread(TID handler)
+bool Processor::ExceptionTable::PopVictimThread(TID handler, TID& victim)
 {
-    // TODO: some sort of fairness?
-
-    // In the specification this is a CAM lookup.
-    TID victim = INVALID_TID;
-    for (TID i = 0; i < m_excp.size(); ++i)
-    {
-        //printf("E %u %d\n", m_excp[i].handler, m_excp[i].activeExcp);
-        if (m_excp[i].handler == handler && m_excp[i].activeExcp)
-        {
-            victim = i;
-            break;
-        }
-    }
+    // PeekVictimThread requests arbitration
+    if (!PeekVictimThread(handler, victim))
+        return false;
 
     // Clear this entry from the AHT
     if (victim != INVALID_TID)
@@ -53,7 +53,33 @@ TID Processor::ExceptionTable::GetVictimThread(TID handler)
         }
     }
 
-    return victim;
+    return true;
+
+}
+
+bool Processor::ExceptionTable::PeekVictimThread(TID handler, TID& victim)
+{
+
+    // TODO: some sort of fairness?
+
+    if (!p_activeHandlerTable.Invoke())
+    {
+        DeadlockWrite("Unable to acquire active handler table for read access");
+        return false;
+    }
+
+    // In the specification this is a CAM lookup.
+    victim = INVALID_TID;
+    for (TID i = 0; i < m_excp.size(); ++i)
+    {
+        if (m_excp[i].handler == handler && m_excp[i].activeExcp)
+        {
+            victim = i;
+            break;
+        }
+    }
+
+    return true;
 }
 
 void Processor::ExceptionTable::Cmd_Info(ostream& /*out*/, const vector<string>& /* arguments */) const

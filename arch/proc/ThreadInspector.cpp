@@ -47,9 +47,19 @@ Result Processor::ThreadInspector::DoIncomingOperation()
         switch (op.field)
         {
             case F_HTID:
+                if (!m_excpTable.p_readwrite.Invoke())
+                {
+                    DeadlockWrite("Unable to acquire read access to exception table.");
+                    return FAILED;
+                }
                 data = m_excpTable[op.vtid].handler;
                 break;
             case F_EXCP:
+                if (!m_excpTable.p_readwrite.Invoke())
+                {
+                    DeadlockWrite("Unable to acquire read access to exception table.");
+                    return FAILED;
+                }
                 data = m_excpTable[op.vtid].excp;
                 break;
             case F_PC:
@@ -239,9 +249,19 @@ Result Processor::ThreadInspector::DoIncomingOperation()
         switch (op.field)
         {
             case F_HTID:
+                if (!m_excpTable.p_readwrite.Invoke())
+                {
+                    DeadlockWrite("Unable to acquire write access to exception table.");
+                    return FAILED;
+                }
                 m_excpTable[op.vtid].handler = op.value;
                 break;
             case F_EXCP:
+                if (!m_excpTable.p_readwrite.Invoke())
+                {
+                    DeadlockWrite("Unable to acquire write access to exception table.");
+                    return FAILED;
+                }
                 m_excpTable[op.vtid].excp = op.value;
                 break;
             case F_PC:

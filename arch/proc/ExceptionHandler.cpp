@@ -33,13 +33,14 @@ Result Processor::ExceptionHandler::DoIncomingException()
 {
     assert(!m_incoming.Empty());
     const NewException& e = m_incoming.Front();
-    const TID htid = m_excpTable[e.tid].handler;
-    COMMIT
+
+    if (!m_excpTable.p_readwrite.Invoke())
     {
-        DebugSimWrite("New exception in T%u: %u (HT%u)", e.tid, e.excp, htid);
-        m_excpTable[e.tid].excp |= e.excp;
-        m_excpTable.HasNewException(e.tid);
+        DeadlockWrite("Unable to acquire write access to exception table.");
+        return FAILED;
     }
+
+    const TID htid = m_excpTable[e.tid].handler;
 
     if (m_excpTable[htid].chkexWaiting)
     {
@@ -54,6 +55,19 @@ Result Processor::ExceptionHandler::DoIncomingException()
             return FAILED;
         }
     }
+
+    if (!m_excpTable.HasNewException(e.tid))
+    {
+        DeadlockWrite("Unable to write HTID T%u to AHT for T%u", (unsigned)htid, (unsigned)e.tid);
+        return FAILED;
+    }
+
+    COMMIT
+    {
+        m_excpTable[e.tid].excp |= e.excp;
+    }
+
+    DebugSimWrite("New exception in T%u: %u (HT%u)", e.tid, e.excp, htid);
 
     m_incoming.Pop();
     return SUCCESS;
