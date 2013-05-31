@@ -39,7 +39,7 @@ private:
         Field field;
         OpType type;
         union {
-            unsigned value;
+            Integer value;
             RegAddr Rc;
         };
     };
@@ -72,7 +72,7 @@ public:
     // Public interface
     typedef Field field_type;
     bool QueueGetOperation(TID tid, TID vtid, Field field, const RegAddr &Rc);
-    bool QueuePutOperation(TID tid, TID vtid, Field field, unsigned value);
+    bool QueuePutOperation(TID tid, TID vtid, Field field, Integer value);
 
     // Debugging
     void Cmd_Info(std::ostream& out, const std::vector<std::string>& arguments) const override;

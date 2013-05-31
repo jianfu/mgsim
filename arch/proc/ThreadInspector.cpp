@@ -432,7 +432,7 @@ bool Processor::ThreadInspector::QueueGetOperation(TID tid, TID vtid, Field fiel
     return true;
 }
 
-bool Processor::ThreadInspector::QueuePutOperation(TID tid, TID vtid, Field field, unsigned value)
+bool Processor::ThreadInspector::QueuePutOperation(TID tid, TID vtid, Field field, Integer value)
 {
     assert(tid != INVALID_TID);
     assert(vtid != INVALID_TID);
