@@ -113,7 +113,6 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::OnCycle()
             throw e;
         else
         {
-            //fprintf(stderr, "Caught exception in T%u @ %x: %u\n", m_output.tid, e.GetPC(), e.GetExcp());
             action = PIPE_FLUSH;
             COMMIT
             {

@@ -107,6 +107,7 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
         LFID    fid;
         bool    swch;
         bool    kill;
+        SuspendType suspend;
         Excp    excp;
 
         // Admin (debugging, traces)
@@ -114,7 +115,7 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
         const char*  pc_sym;        // Symbolic name for PC
         uint64_t     logical_index; // Thread logical index
 
-        CommonData() : pc(0), tid(0), fid(0), swch(false), kill(false), excp(0), pc_dbg(0), pc_sym(NULL), logical_index(0) {}
+        CommonData() : pc(0), tid(0), fid(0), swch(false), kill(false), suspend(SUSPEND_NONE), excp(0), pc_dbg(0), pc_sym(NULL), logical_index(0) {}
         CommonData(const CommonData&) = default;
         CommonData& operator=(const CommonData&) = default;
         virtual ~CommonData() {}
@@ -198,7 +199,6 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
 
     struct ExecuteMemoryLatch : public Latch
     {
-        SuspendType   suspend;
 
         // Memory operation information
         MemAddr       address;
@@ -217,8 +217,7 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
         RegAddr       Ra; // the origin of the value for a store
 
         ExecuteMemoryLatch()
-            : suspend(SUSPEND_NONE),
-            address(0), size(0), sign_extend(false),
+            : address(0), size(0), sign_extend(false),
             Rcv(), Rc(),
             placeSize(0),
             Rrc(), Ra() {}
@@ -226,13 +225,12 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
 
     struct MemoryWritebackLatch : public Latch
     {
-        SuspendType   suspend;
         RegAddr       Rc;
         PipeValue     Rcv;
 
         RemoteMessage Rrc;
 
-        MemoryWritebackLatch() : suspend(SUSPEND_NONE), Rc(), Rcv(), Rrc() {}
+        MemoryWritebackLatch() : Rc(), Rcv(), Rrc() {}
     };
 
     //
@@ -465,6 +463,7 @@ public:
 #define ThrowIllegalInstructionException(Obj, PC, ...)                  \
     ThrowIllegalInstructionExceptionWithExcp(Obj, PC, EXCP_NONE, __VA_ARGS__)
 
+    // Used so the processors exception handler can take over. Needs better name
 #define ThrowIllegalInstructionExceptionWithExcp(Obj, PC, Excp, ...)    \
     do {                                                                \
         auto ex = exceptf<IllegalInstructionException>(Obj, "Illegal instruction: " __VA_ARGS__); \

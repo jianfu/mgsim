@@ -19,6 +19,7 @@ void Processor::Pipeline::FetchStage::Clear(TID tid)
 Processor::Pipeline::PipeAction Processor::Pipeline::FetchStage::OnCycle()
 {
     MemAddr pc = m_pc;
+    Excp excp = EXCP_NONE;
     if (m_switched)
     {
         // We need to switch to a new thread
@@ -48,12 +49,22 @@ Processor::Pipeline::PipeAction Processor::Pipeline::FetchStage::OnCycle()
 
         // Read the cache line for this PC
         size_t offset = (size_t)(pc % m_icache.GetLineSize());   // Offset within the cacheline
-        if (!m_icache.Read(thread.cid, pc - offset, m_buffer, m_icache.GetLineSize()))
+        try
         {
-            DeadlockWrite("F%u/T%u(%llu) %s fetch stall due to I-cache miss",
-                          (unsigned)thread.family, (unsigned)tid, (unsigned long long)thread.index,
-                          m_parent.GetProcessor().GetSymbolTable()[pc].c_str());
-            return PIPE_STALL;
+            if (!m_icache.Read(thread.cid, pc - offset, m_buffer, m_icache.GetLineSize()))
+            {
+                DeadlockWrite("F%u/T%u(%llu) %s fetch stall due to I-cache miss",
+                            (unsigned)thread.family, (unsigned)tid, (unsigned long long)thread.index,
+                            m_parent.GetProcessor().GetSymbolTable()[pc].c_str());
+                return PIPE_STALL;
+            }
+        }
+        catch (SimulationException& e)
+        {
+            if (e.GetExcp() == EXCP_NONE)
+                throw e;
+            else
+                excp = e.GetExcp();
         }
 
         COMMIT
@@ -108,8 +119,8 @@ Processor::Pipeline::PipeAction Processor::Pipeline::FetchStage::OnCycle()
         const bool lastThread = activeThreads.Empty() || (activeThreads.Singular() && activeThreads.Front() == m_output.tid);
 
         // 3) terminated or i-cache boundary
-        m_output.kill         = ((control & 2) != 0);
-        const bool mustSwitch = m_output.kill || (next_pc % m_icache.GetLineSize() == 0);
+        m_output.kill         = ((control & 2) != 0) && excp == EXCP_NONE;
+        const bool mustSwitch = m_output.kill || (next_pc % m_icache.GetLineSize() == 0) || excp != EXCP_NONE;
 
         // Switch if must, or if desired unless there is only 1 thread:
         m_output.swch         = mustSwitch || (wantSwitch && !lastThread);
@@ -117,7 +128,8 @@ Processor::Pipeline::PipeAction Processor::Pipeline::FetchStage::OnCycle()
         // Fill output latch structure
         m_output.pc           = pc;
         m_output.instr        = UnserializeInstruction(&instrs[iInstr]);
-        m_output.excp         = 0;
+        m_output.excp         = excp;
+        m_output.suspend      = (excp == EXCP_NONE) ? SUSPEND_NONE : SUSPEND_EXCEPTION;
 
         m_output.pc_dbg       = pc;
         if (GetKernel()->GetDebugMode() & Kernel::DEBUG_CPU_MASK)

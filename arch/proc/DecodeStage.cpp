@@ -44,7 +44,7 @@ RegAddr Processor::Pipeline::DecodeStage::TranslateRegister(unsigned char reg, R
         case RC_GLOBAL:
             if (reg + nRegs > family.count.globals)
             {
-                ThrowIllegalInstructionException(*this, m_input.pc, "Invalid global register offset %c%03d (size %u)",
+                ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_REGISTER, "Invalid global register offset %c%03d (size %u)",
                                                  type == RT_INTEGER ? 'R' : 'F', reg, size);
             }
 
@@ -60,7 +60,7 @@ RegAddr Processor::Pipeline::DecodeStage::TranslateRegister(unsigned char reg, R
         case RC_SHARED:
             if (reg + nRegs > family.count.shareds)
             {
-                ThrowIllegalInstructionException(*this, m_input.pc, "Invalid shared register offset %c%03d (size %u)",
+                ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_REGISTER, "Invalid shared register offset %c%03d (size %u)",
                                                  type == RT_INTEGER ? 'R' : 'F', reg, size);
             }
 
@@ -70,7 +70,7 @@ RegAddr Processor::Pipeline::DecodeStage::TranslateRegister(unsigned char reg, R
         case RC_LOCAL:
             if (reg + nRegs > family.count.locals)
             {
-                ThrowIllegalInstructionException(*this, m_input.pc, "Invalid local register offset %c%03d (size %u)",
+                ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_REGISTER, "Invalid local register offset %c%03d (size %u)",
                                                  type == RT_INTEGER ? 'R' : 'F', reg, size);
             }
 
@@ -81,7 +81,7 @@ RegAddr Processor::Pipeline::DecodeStage::TranslateRegister(unsigned char reg, R
         case RC_DEPENDENT:
             if (reg + nRegs > family.count.shareds)
             {
-                ThrowIllegalInstructionException(*this, m_input.pc, "Invalid dependent register offset %c%03d (size %u)",
+                ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_REGISTER, "Invalid dependent register offset %c%03d (size %u)",
                                                  type == RT_INTEGER ? 'R' : 'F', reg, size);
             }
 
@@ -110,6 +110,9 @@ Processor::Pipeline::PipeAction Processor::Pipeline::DecodeStage::OnCycle()
         m_output.placeSize    = m_input.placeSize;
         m_output.legacy       = m_input.legacy;
         m_output.RaNotPending = false;
+
+        if (m_input.excp)
+            return PIPE_FLUSH;
 
         try
         {
@@ -150,12 +153,25 @@ Processor::Pipeline::PipeAction Processor::Pipeline::DecodeStage::OnCycle()
         }
         catch (IllegalInstructionException& ex)
         {
-            stringstream error;
-            error << "While decoding "
-                  << hex << "0x" << setfill('0') << setw(sizeof(Integer) * 2) << m_input.instr << dec
-                  << " for F" << m_output.fid << "/T" << m_output.tid << "(" << m_input.logical_index << ")";
-            ex.AddDetails(error.str());
-            throw ex;
+            if (ex.GetExcp() == EXCP_NONE)
+            {
+                stringstream error;
+                error << "While decoding "
+                    << hex << "0x" << setfill('0') << setw(sizeof(Integer) * 2) << m_input.instr << dec
+                    << " for F" << m_output.fid << "/T" << m_output.tid << "(" << m_input.logical_index << ")";
+                ex.AddDetails(error.str());
+                throw ex;
+            }
+            else
+            {
+                COMMIT
+                {
+                    m_output.Rc = INVALID_REG;
+                    m_output.excp |= ex.GetExcp();
+                    m_output.suspend = SUSPEND_EXCEPTION;
+                }
+                return PIPE_FLUSH;
+            }
         }
     }
 

@@ -195,22 +195,28 @@ bool Processor::ICache::Read(CID cid, MemAddr address, void* data, MemSize size)
 
     if (offset + size > m_lineSize)
     {
-        throw exceptf<InvalidArgumentException>(*this, "Read (%#016llx, %zd): Address range crosses over cache line boundary",
+        auto ex = exceptf<InvalidArgumentException>(*this, "Read (%#016llx, %zd): Address range crosses over cache line boundary",
                                                 (unsigned long long)address, (size_t)size);
+        ex.SetExcp(EXCP_ICACHE_READ);
+        throw ex;
     }
 
 #if MEMSIZE_MAX >= SIZE_MAX
     if (size > SIZE_MAX)
     {
-        throw exceptf<InvalidArgumentException>(*this, "Read (%#016llx, %zd): Size argument too big",
+        auto ex = exceptf<InvalidArgumentException>(*this, "Read (%#016llx, %zd): Size argument too big",
                                                 (unsigned long long)address, (size_t)size);
+        ex.SetExcp(EXCP_ICACHE_READ);
+        throw ex;
     }
 #endif
 
     if (m_lines[cid].state == LINE_EMPTY || m_lines[cid].tag != tag)
     {
-        throw exceptf<InvalidArgumentException>(*this, "Read (%#016llx, %zd): Attempting to read from an invalid cache line",
+        auto ex = exceptf<InvalidArgumentException>(*this, "Read (%#016llx, %zd): Attempting to read from an invalid cache line",
                                                 (unsigned long long)address, (size_t)size);
+        ex.SetExcp(EXCP_ICACHE_READ);
+        throw ex;
     }
 
     const Line& line = m_lines[cid];
