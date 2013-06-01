@@ -426,6 +426,8 @@ bool Processor::Pipeline::ExecuteStage::ExecuteINTA(PipeValue& Rcv, const PipeVa
             Rc = result;
             break;
         }
+        default:
+            ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_OPCODE, "Unknown opcode (OP, INTA)");
     }
     return true;
 }
@@ -461,6 +463,8 @@ bool Processor::Pipeline::ExecuteStage::ExecuteINTL(PipeValue& Rcv, const PipeVa
         // Misc functions
         case A_INTLFUNC_IMPLVER: Rc = IMPLVER_EV6; break; // We simulate an EV6 ISA
         case A_INTLFUNC_AMASK:   Rc = Rb & (AMASK_BWX | AMASK_FIX | AMASK_CIX | AMASK_MVI); break;
+        default:
+            ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_OPCODE, "Unknown opcode (OP, INTL)");
     }
     return true;
 }
@@ -510,6 +514,8 @@ bool Processor::Pipeline::ExecuteStage::ExecuteINTS(PipeValue& Rcv, const PipeVa
         case A_INTSFUNC_SLL: Rc = Ra << (Rb & 0x3F); break;
         case A_INTSFUNC_SRL: Rc = Ra >> (Rb & 0x3F); break;
         case A_INTSFUNC_SRA: Rc = (int64_t)Ra >> (Rb & 0x3F); break;
+        default:
+            ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_OPCODE, "Unknown opcode (OP, INTS)");
     }
     return true;
 }
@@ -533,7 +539,8 @@ bool Processor::Pipeline::ExecuteStage::ExecuteINTM(PipeValue& Rcv, const PipeVa
         case A_INTMFUNC_DIVQ:  CHECKDIV0((int64_t)Rb);  Rc = (int64_t)Ra / (int64_t)Rb; break;
         case A_INTMFUNC_UDIVL: CHECKDIV0((uint32_t)Rb); Rc = (uint64_t)(uint32_t)((uint32_t)Ra / (uint32_t)Rb); break;
         case A_INTMFUNC_UDIVQ: CHECKDIV0(Rb);           Rc = Ra / Rb; break;
-        default: UNREACHABLE; break;
+        default:
+            ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_OPCODE, "Unknown opcode (OP, INTM)");
     }
     Rcv.m_integer = Rc;
     return true;
@@ -651,6 +658,8 @@ bool Processor::Pipeline::ExecuteStage::ExecuteFLTV(PipeValue& Rcv, const PipeVa
         case A_FLTVFUNC_CVTGF_SU   : {}
         case A_FLTVFUNC_CVTGD_SU   : {}
         case A_FLTVFUNC_CVTGQ_SV   : {}
+        default:
+            ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_OPCODE, "Unknown opcode (OP, FLTV)");
    }
    return true;
 }
@@ -784,6 +793,8 @@ bool Processor::Pipeline::ExecuteStage::ExecuteFLTL(PipeValue& Rcv, const PipeVa
         case A_FLTIFUNC_FCMOVLE: if (BranchTaken(A_OP_FBLE, Rav)) Rc = Rb; else Rcv.m_state = RST_INVALID; break;
         case A_FLTIFUNC_FCMOVGT: if (BranchTaken(A_OP_FBGT, Rav)) Rc = Rb; else Rcv.m_state = RST_INVALID; break;
             break;
+        default:
+            ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_OPCODE, "Unknown opcode (OP, FLTL)");
     }
     return true;
 }
@@ -943,6 +954,8 @@ bool Processor::Pipeline::ExecuteStage::ExecuteFPTI(PipeValue& Rcv, const PipeVa
             Rcv.m_integer = result;
             break;
         }
+        default:
+            ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_OPCODE, "Unknown opcode (OP, FLTL)");
     }
     return true;
 }
@@ -1102,7 +1115,6 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
         {
             if ((m_input.function & A_UTHREAD_LOCAL_MASK) == A_UTHREAD_LOCAL_VALUE)
             {
-                //COMMIT { printf("LOCAL %lx %x\n", m_input.pc, m_input.function); }
                 switch (m_input.function)
                 {
                 case A_UTHREAD_LDBP:
@@ -1188,7 +1200,6 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
             }
             else if ((m_input.function & A_UTHREAD_REMOTE_MASK) == A_UTHREAD_REMOTE_VALUE)
             {
-                //COMMIT { printf("REMOTE %lx %x\n", m_input.pc, m_input.function); }
                 const FID fid = m_parent.GetProcessor().UnpackFID(Rav);
                 //FT-BEGIN
                 const FID rfid = m_parent.GetProcessor().UnpackFID(Rbv);
@@ -1253,7 +1264,13 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
             }
             else if ((m_input.function & A_UTHREAD_ALLOC_MASK) == A_UTHREAD_ALLOC_VALUE)
             {
-                //COMMIT { printf("ALLOC %lx %x\n", m_input.pc, m_input.function); }
+                // Currently an allocate is valid when the function is like:
+                // 1000000, 1000001, 1000011 ie no flags, only S or both S and X
+                if (m_input.function ^ A_UTHREAD_ALLOC_VALUE &&
+                   (m_input.function ^ A_UTHREAD_ALLOC_VALUE) ^ A_UTHREAD_ALLOC_S_MASK &&
+                   (m_input.function ^ A_UTHREAD_ALLOC_VALUE) ^ (A_UTHREAD_ALLOC_S_MASK | A_UTHREAD_ALLOC_X_MASK))
+                    ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_OPCODE, "Unknown opcode (OP, alloc)");
+
                 Integer flags  = Rbv;
                 PlaceID place  = m_parent.GetProcessor().UnpackPlace(Rav);
                 bool suspend   = (m_input.function & A_UTHREAD_ALLOC_S_MASK);
@@ -1265,7 +1282,8 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
             }
             else if ((m_input.function & A_UTHREAD_CREB_MASK) == A_UTHREAD_CREB_VALUE)
             {
-                //COMMIT { printf("CREB %lx %x\n", m_input.pc, m_input.function); }
+                if (m_input.function != A_CREATE_B_A && m_input.function != A_CREATE_B_I)
+                    ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_OPCODE, "Unknown opcode (OP, creb)");
                 return ExecBundle(Rav, (m_input.function == A_CREATE_B_I), Rbv, m_input.Rc.index);
             }
             else
@@ -1289,6 +1307,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                 case A_UTHREADF_GETG: return ReadFamilyRegister(RRT_GLOBAL,           RT_FLOAT, fid, m_input.regofs);
                 case A_UTHREADF_GETS: return ReadFamilyRegister(RRT_LAST_SHARED,      RT_FLOAT, fid, m_input.regofs);
                 }
+                ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_OPCODE, "Unknown opcode (FPOP)");
             }
         }
         else
@@ -1388,8 +1407,9 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
             }
             else
             {
-                assert(fpuop != FPU_OP_NONE);
-                
+                if (fpuop == FPU_OP_NONE)
+                    ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_OPCODE, "Unknown opcode (FPOP)");
+
                 // Dispatch long-latency operation to FPU
                 if (!m_fpu.QueueOperation(m_fpuSource, fpuop, 8,
                     m_input.Rav.m_float.tofloat(m_input.Rav.m_size),
@@ -1443,6 +1463,8 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                     m_output.Rcv.m_integer = GetCycleNo();
                 }
                 break;
+            default:
+                ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_OPCODE, "Unknown opcode (MISC)");
         }
         break;
 
