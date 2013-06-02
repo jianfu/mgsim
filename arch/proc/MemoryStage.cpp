@@ -14,6 +14,7 @@ namespace Simulator
 Processor::Pipeline::PipeAction Processor::Pipeline::MemoryStage::OnCycle()
 {
     PipeValue rcv = m_input.Rcv;
+    Excp excp = EXCP_NONE;
 
     unsigned inload = 0;
     unsigned instore = 0;
@@ -112,13 +113,18 @@ Processor::Pipeline::PipeAction Processor::Pipeline::MemoryStage::OnCycle()
             }
             catch (SimulationException& e)
             {
-                // Add details about store
-                stringstream details;
-                details << "While processing store: *" 
-                        << setw(sizeof(Integer) * 2) << setfill('0') << right << hex << m_input.address << left 
-                        << " <- " << m_input.Ra.str() << " = " << m_input.Rcv.str(m_input.Ra.type);
-                e.AddDetails(details.str());
-                throw;
+                if (e.GetExcp() == EXCP_NONE)
+                {
+                    // Add details about store
+                    stringstream details;
+                    details << "While processing store: *"
+                            << setw(sizeof(Integer) * 2) << setfill('0') << right << hex << m_input.address << left
+                            << " <- " << m_input.Ra.str() << " = " << m_input.Rcv.str(m_input.Ra.type);
+                    e.AddDetails(details.str());
+                    throw;
+                }
+                else
+                    excp = e.GetExcp();
             }
         }
         // Memory read
@@ -271,13 +277,18 @@ Processor::Pipeline::PipeAction Processor::Pipeline::MemoryStage::OnCycle()
                 }
                 catch (SimulationException& e)
                 {
-                    // Add details about load
-                    stringstream details;
-                    details << "While processing load: *"
-                            << setw(sizeof(Integer) * 2) << setfill('0') << right << hex << m_input.address << left 
-                            << " -> " << m_input.Rc.str();
-                    e.AddDetails(details.str());
-                    throw;
+                    if (e.GetExcp() == EXCP_NONE)
+                    {
+                        // Add details about load
+                        stringstream details;
+                        details << "While processing load: *"
+                                << setw(sizeof(Integer) * 2) << setfill('0') << right << hex << m_input.address << left
+                                << " -> " << m_input.Rc.str();
+                        e.AddDetails(details.str());
+                        throw;
+                    }
+                    else
+                        excp = e.GetExcp();
                 }
             }
         }
@@ -293,13 +304,21 @@ Processor::Pipeline::PipeAction Processor::Pipeline::MemoryStage::OnCycle()
         m_output.Rrc     = m_input.Rrc;
         m_output.Rcv     = rcv;
 
+        if (excp != EXCP_NONE)
+        {
+            fprintf(stderr, "EXCP MEM STAGE!!\n");
+            m_output.suspend = SUSPEND_EXCEPTION;
+            m_output.Rc = INVALID_REG;
+            m_output.excp |= excp;
+        }
+
         // Increment counters
         m_loads += !!inload;
         m_load_bytes += inload;
         m_stores += !!instore;
         m_store_bytes += instore;
     }
-    return PIPE_CONTINUE;
+    return excp == EXCP_NONE ? PIPE_CONTINUE : PIPE_FLUSH;
 }
 
 Processor::Pipeline::MemoryStage::MemoryStage(Pipeline& parent, Clock& clock, const ExecuteMemoryLatch& input, MemoryWritebackLatch& output, DCache& dcache, Allocator& alloc, FamilyTable& familyTable, ThreadTable& threadTable, Config& /*config*/)
