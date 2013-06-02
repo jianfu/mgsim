@@ -558,6 +558,33 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecBreak()
     return PIPE_CONTINUE;
 }
 
+Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::InspectThreadState(TID vtid, ThreadStateField field, RegAddr writeback_reg)
+{
+    COMMIT
+    {
+        m_output.Rrc.type                      = RemoteMessage::MSG_RGET;
+        m_output.Rrc.threadstate.pid           = m_parent.GetProcessor().GetPID();
+        m_output.Rrc.threadstate.vtid          = vtid;
+        m_output.Rrc.threadstate.field         = field;
+        m_output.Rrc.threadstate.writeback_reg = writeback_reg;
+        m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
+    }
+    return PIPE_CONTINUE;
+}
+
+Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ModifyThreadState(TID vtid, ThreadStateField field, Integer value)
+{
+    COMMIT
+    {
+        m_output.Rrc.type              = RemoteMessage::MSG_RPUT;
+        m_output.Rrc.threadstate.pid   = m_parent.GetProcessor().GetPID();
+        m_output.Rrc.threadstate.vtid  = vtid;
+        m_output.Rrc.threadstate.field = field;
+        m_output.Rrc.threadstate.value = value;
+    }
+    return PIPE_CONTINUE;
+}
+
 void Processor::Pipeline::ExecuteStage::ExecDebugOutput(Integer value, int command, int flags) const
 {
     // command:

@@ -33,9 +33,9 @@ Processor::Processor(const std::string& name, Object& parent, Clock& clock, PID 
     m_dcache		 ("dcache",        *this, clock, m_allocator, m_familyTable, m_threadTable/*[FT]*/, m_registerFile, memory, config),
     m_excpTable      ("exceptions",      *this, clock, config),
     m_excpHandler    ("excphandler",     *this, clock, m_excpTable, m_allocator, m_familyTable, m_registerFile, config),
-    m_threadInspector("threadInspector", *this, clock, m_excpTable, m_allocator, m_threadTable, m_familyTable, m_registerFile, config),
+    m_threadInspector("threadInspector", *this, clock, m_excpTable, m_allocator, m_threadTable, m_familyTable, m_registerFile, m_network, config),
     m_pipeline       ("pipeline",        *this, clock, m_registerFile, m_network, m_allocator, m_familyTable, m_threadTable, m_icache, m_dcache, m_excpTable, m_excpHandler, m_threadInspector, fpu, config),
-    m_network        ("network",         *this, clock, grid, m_allocator, m_registerFile, m_familyTable, config),
+    m_network        ("network",         *this, clock, grid, m_allocator, m_registerFile, m_familyTable, m_threadInspector, config),
     m_mmio           ("mmio",            *this, clock),
     m_apr_file("aprs", *this, config),
     m_asr_file("asrs", *this, config),
@@ -138,7 +138,7 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
     m_excpTable.p_activeHandlerTable.AddProcess(m_pipeline.p_Pipeline);
     m_excpTable.p_activeHandlerTable.AddProcess(m_excpHandler.p_NewException);
 
-    m_threadInspector.p_service.AddProcess(m_pipeline.p_Pipeline);
+    m_threadInspector.p_service.AddProcess(m_network.p_DelegationIn);
 
     if (m_io_if != NULL)
     {
@@ -238,6 +238,7 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
     m_network.m_delegateIn.AddProcess(m_network.p_rAllocResponse);          
     //FT-END
     m_network.m_delegateIn.AddProcess(m_pipeline.p_Pipeline);               // Sending local messages
+    m_network.m_delegateIn.AddProcess(m_threadInspector.p_Operation);       // Local RGET response
     for (size_t i = 0; i < m_grid.size(); i++)
     {
         // Every core can send delegation messages here
@@ -347,6 +348,7 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
         opt(m_allocator.m_readyThreads2) );
 
     m_threadInspector.p_Operation.SetStorageTraces(
+        opt(DELEGATE) ^
         opt(m_allocator.m_readyThreads2) );
 
     StorageTraceSet pls_writeback =
@@ -404,6 +406,7 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
         /* MSG_DETACH */            opt(m_network.m_link.out ^ m_network.m_rlink.out /*[FT]*/) ^
         /* MSG_BREAK */             (opt(m_network.m_link.out ^ m_network.m_rlink.out /*[FT]*/ ^ m_network.m_syncs) * opt(m_network.m_link.out ^ m_network.m_rlink.out /*[FT]*/)) ^
         /* MSG_RAW_REGISTER */      m_allocator.m_readyThreads2 ^
+        /* MSG_RGET/RPUT */         m_threadInspector.m_incoming ^
         /* RRT_LAST_SHARED */       (DELEGATE) ^
         /* RRT_FIRST_DEPENDENT */   (m_allocator.m_readyThreads2) ^
         /* RRT_GLOBAL */            (m_allocator.m_readyThreads2 * opt(m_network.m_link.out ^ m_network.m_rlink.out /*[FT]*/)) ^

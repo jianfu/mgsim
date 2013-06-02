@@ -362,6 +362,8 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
         //FT-END
         PipeAction ExecCreate(const FID& fid, MemAddr address, RegIndex completion);
         PipeAction ExecBreak();
+        PipeAction InspectThreadState(TID vtid, ThreadStateField field, RegAddr writeback_reg);
+        PipeAction ModifyThreadState(TID vtid, ThreadStateField field, Integer value);
         void       ExecDebug(Integer value, Integer stream) const;
         void       ExecDebug(double value, Integer stream) const;
         PipeAction OnCycle();

@@ -11,7 +11,7 @@ struct RemoteMessage
     {
         MSG_NONE,           ///< No message
         MSG_ALLOCATE,       ///< Allocate family
-        MSG_BUNDLE,            ///< Indirect creation
+        MSG_BUNDLE,         ///< Indirect creation
         MSG_SET_PROPERTY,   ///< Set family property
         MSG_CREATE,         ///< Create family
         MSG_SYNC,           ///< Synchronise on family
@@ -26,6 +26,8 @@ struct RemoteMessage
         MSG_PAIR,           ///< Paring the master and redundant family
 		MSG_RTHREADDONE,
         //FT-END
+        MSG_RGET,           ///< Thread state inspection
+        MSG_RPUT,           ///< Thread state modification
     };
 
     Type type;      ///< Type of the message
@@ -135,6 +137,18 @@ struct RemoteMessage
             TID           tid;
         } rtd;
         //FT-END
+
+        struct
+        {
+            PID              pid;
+            TID              vtid;
+            ThreadStateField field;
+            union
+            {
+                Integer      value;
+                RegAddr      writeback_reg;
+            };
+        } threadstate;
     };
 
     std::string str() const;
@@ -281,6 +295,8 @@ struct AllocResponse
     //FT-END  
 };
 
+class ThreadInspector;
+
 class Network : public Object, public Inspect::Interface<Inspect::Read>
 {
     /*
@@ -381,7 +397,7 @@ public:
 		bool	 error;
     };
 
-    Network(const std::string& name, Processor& parent, Clock& clock, const std::vector<Processor*>& grid, Allocator& allocator, RegisterFile& regFile, FamilyTable& familyTable, Config& config);
+    Network(const std::string& name, Processor& parent, Clock& clock, const std::vector<Processor*>& grid, Allocator& allocator, RegisterFile& regFile, FamilyTable& familyTable, ThreadInspector& threadInspector, Config& config);
     Network(const Network&) = delete;
     Network& operator=(const Network&) = delete;
 
@@ -426,6 +442,7 @@ private:
     RegisterFile&                  m_regFile;
     FamilyTable&                   m_familyTable;
     Allocator&                     m_allocator;
+    ThreadInspector&               m_threadInspector;
     Network*                       m_prev;
     Network*                       m_next;
     const std::vector<Processor*>& m_grid;

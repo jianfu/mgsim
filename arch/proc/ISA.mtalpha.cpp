@@ -1244,41 +1244,15 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                 {
                     // Ra contains both vtid and field. Field in lower 16 bits,
                     // remaining bits are for vtid.
-                    ThreadInspector::field_type field = (ThreadInspector::field_type)(m_input.Rav.m_integer.get(m_input.Rav.m_size) & 0xffff);
-                    unsigned vtid = m_input.Rav.m_integer.get(m_input.Rav.m_size) >> 16;
-                    if (!m_threadInspector.QueuePutOperation(m_input.tid, vtid, field, m_input.Rbv.m_integer.get(m_input.Rbv.m_size)))
-                    {
-                        DeadlockWrite("F%u/T%u(%llu) %s unable to queue RPUT operation",
-                                    (unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned long long)m_input.logical_index, m_input.pc_sym);
-
-                        return PIPE_STALL;
-                    }
-                    break;
+                    ThreadStateField field = (ThreadStateField)(Rav & 0xffff);
+                    unsigned vtid = Rav >> 16;
+                    return ModifyThreadState(vtid, field, Rbv);
                 }
 
                 case A_UTHREAD_SYNC:     return ExecSync(fid);
                 case A_UTHREAD_GETG:     return ReadFamilyRegister(RRT_GLOBAL,      RT_INTEGER, fid, m_input.regofs);
                 case A_UTHREAD_GETS:     return ReadFamilyRegister(RRT_LAST_SHARED, RT_INTEGER, fid, m_input.regofs);
-                case A_UTHREAD_RGET:
-                {
-                    if (!m_threadInspector.QueueGetOperation(m_input.tid,
-                        (ThreadInspector::field_type)m_input.Rav.m_integer.get(m_input.Rav.m_size),
-                        (ThreadInspector::field_type)m_input.Rbv.m_integer.get(m_input.Rbv.m_size),
-                        m_input.Rc))
-                    {
-                        DeadlockWrite("F%u/T%u(%llu) %s unable to queue RPUT operation for %s",
-                                    (unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned long long)m_input.logical_index, m_input.pc_sym,
-                                    m_input.Rc.str().c_str());
-
-                        return PIPE_STALL;
-                    }
-
-                    COMMIT
-                    {
-                        m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_output.Rcv.m_size);
-                    }
-                    break;
-                }
+                case A_UTHREAD_RGET:     return InspectThreadState((TID)Rav, (ThreadStateField)Rbv, m_input.Rc);
                 default: ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_OPCODE, "Unknown opcode (OP, remote)");
                 }
             }

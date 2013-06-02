@@ -12,9 +12,9 @@ using namespace std;
 namespace Simulator
 {
 
-Processor::ThreadInspector::ThreadInspector(const std::string& name, Processor& parent, Clock& clock, ExceptionTable& excpTable, Allocator& alloc, ThreadTable& threadTable, FamilyTable& familyTable, RegisterFile& regFile, Config& config)
+Processor::ThreadInspector::ThreadInspector(const std::string& name, Processor& parent, Clock& clock, ExceptionTable& excpTable, Allocator& alloc, ThreadTable& threadTable, FamilyTable& familyTable, RegisterFile& regFile, Network& network, Config& config)
 :   Object(name, parent, clock), m_parent(parent),
-    m_excpTable(excpTable), m_allocator(alloc), m_threadTable(threadTable), m_familyTable(familyTable), m_regFile(regFile),
+    m_excpTable(excpTable), m_allocator(alloc), m_threadTable(threadTable), m_familyTable(familyTable), m_regFile(regFile), m_network(network),
 
     m_incoming("b_incoming",  *this, clock, config.getValue<BufferSize>(*this, "IncomingBufferSize")),
     p_Operation(*this, "new-operation", delegate::create<ThreadInspector, &Processor::ThreadInspector::DoIncomingOperation>(*this) ),
@@ -33,7 +33,6 @@ Result Processor::ThreadInspector::DoIncomingOperation()
     const Op& op = m_incoming.Front();
 
     assert(op.type == OP_GET || op.type == OP_PUT);
-    assert(op.tid != INVALID_TID);
     assert(op.vtid != INVALID_TID);
 
     // Family ID is required quite often
@@ -104,7 +103,7 @@ Result Processor::ThreadInspector::DoIncomingOperation()
                         case 0: data = m_threadTable[op.vtid].LO; break;
                         case 1: data = m_threadTable[op.vtid].HI; break;
 #endif
-                        default: fprintf(stderr, "Unknown status word %x\n", op.field - F_STATUS_WORDS);
+                        default: fprintf(stderr, "Unknown status word %x\n", op.field - F_STATUS_WORDS); return SUCCESS;
                     }
                 else if (op.field >= F_REGISTERS)
                 {
@@ -209,38 +208,19 @@ Result Processor::ThreadInspector::DoIncomingOperation()
         // Only reached when get succeeded and 'data' contains data for
         // writeback to register.
 
-        // Acquire (read/)write access
-        if (!m_regFile.p_asyncW.Write(op.Rc))
-        {
-            DeadlockWrite("Unable to acquire port to write back %s", op.Rc.str().c_str());
-            return FAILED;
-        }
-
-        // Read current state of register
-        RegValue value;
-        if (!m_regFile.ReadRegister(op.Rc, value))
-        {
-            DeadlockWrite("Unable to read register %s", op.Rc.str().c_str());
-            return FAILED;
-        }
-
-        // We can only write our result if the original instruction reached WB
-        // stage, otherwise it will be overwritten by a PENDING value.
-        if (value.m_state != RST_PENDING && value.m_state != RST_WAITING)
-        {
-            DeadlockWrite("RGET completed before register %s was cleared", op.Rc.str().c_str());
-            return FAILED;
-        }
-
-        // Now we know we can write to the register. Prepare it and issue write
-        // to register file.
         RegValue reg;
         reg.m_state = RST_FULL;
         reg.m_integer = data;
 
-        if (!m_regFile.WriteRegister(op.Rc, reg, true))
+        RemoteMessage regwrite;
+        regwrite.type         = RemoteMessage::MSG_RAW_REGISTER;
+        regwrite.rawreg.pid   = op.pid;
+        regwrite.rawreg.addr  = op.Rc;
+        regwrite.rawreg.value = reg;
+
+        if (!m_network.SendMessage(regwrite))
         {
-            DeadlockWrite("Unable to write register %s", op.Rc.str().c_str());
+            DeadlockWrite("Unable to send RGET response to network");
             return FAILED;
         }
     }
@@ -308,7 +288,7 @@ Result Processor::ThreadInspector::DoIncomingOperation()
                         case 0: m_threadTable[op.vtid].LO = op.value; break;
                         case 1: m_threadTable[op.vtid].HI = op.value; break;
 #endif
-                        default: fprintf(stderr, "Unknown status word %x\n", op.field - F_STATUS_WORDS);
+                        default: fprintf(stderr, "Unknown status word %x\n", op.field - F_STATUS_WORDS); return SUCCESS;
                     }
                 else if (op.field >= F_FP_REGISTER_STATUSES)
                     return FAILED;
@@ -410,9 +390,8 @@ Result Processor::ThreadInspector::DoIncomingOperation()
     return SUCCESS;
 }
 
-bool Processor::ThreadInspector::QueueGetOperation(TID tid, TID vtid, Field field, const RegAddr &Rc)
+bool Processor::ThreadInspector::QueueGetOperation(TID vtid, ThreadStateField field, PID pid, const RegAddr &Rc)
 {
-    assert(tid != INVALID_TID);
     assert(vtid != INVALID_TID);
     assert(Rc.valid());
 
@@ -423,18 +402,17 @@ bool Processor::ThreadInspector::QueueGetOperation(TID tid, TID vtid, Field fiel
     }
 
     Op op;
-    op.tid = tid;
     op.vtid = vtid;
     op.field = field;
     op.type = OP_GET;
+    op.pid = pid;
     op.Rc = Rc;
     m_incoming.Push(op);
     return true;
 }
 
-bool Processor::ThreadInspector::QueuePutOperation(TID tid, TID vtid, Field field, Integer value)
+bool Processor::ThreadInspector::QueuePutOperation(TID vtid, ThreadStateField field, Integer value)
 {
-    assert(tid != INVALID_TID);
     assert(vtid != INVALID_TID);
 
     if (!p_service.Invoke())
@@ -444,7 +422,6 @@ bool Processor::ThreadInspector::QueuePutOperation(TID tid, TID vtid, Field fiel
     }
 
     Op op;
-    op.tid = tid;
     op.vtid = vtid;
     op.field = field;
     op.type = OP_PUT;

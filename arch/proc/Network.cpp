@@ -20,14 +20,16 @@ Processor::Network::Network(
     Allocator&                alloc,
     RegisterFile&             regFile,
     FamilyTable&              familyTable,
+    ThreadInspector&          threadInspector,
     Config&                   config
 ) :
     Object(name, parent, clock),
 
-    m_parent     (parent),
-    m_regFile    (regFile),
-    m_familyTable(familyTable),
-    m_allocator  (alloc),
+    m_parent         (parent),
+    m_regFile        (regFile),
+    m_familyTable    (familyTable),
+    m_allocator      (alloc),
+    m_threadInspector(threadInspector),
 
     m_prev(NULL),
     m_next(NULL),
@@ -149,6 +151,8 @@ bool Processor::Network::SendMessage(const RemoteMessage& msg)
     case RemoteMessage::MSG_RTHREADDONE:   dmsg.dest = msg.rtd.pid; break;
     //FT-END
 
+    case RemoteMessage::MSG_RGET:
+    case RemoteMessage::MSG_RPUT:         dmsg.dest = msg.threadstate.pid; break;
     default:                              dmsg.dest = INVALID_PID; break;
     }
 
@@ -1060,6 +1064,20 @@ Result Processor::Network::DoDelegationIn()
 	break;
     //FT-END
 		
+    case RemoteMessage::MSG_RGET:
+        if (!m_threadInspector.QueueGetOperation(msg.threadstate.vtid, msg.threadstate.field, dmsg.src, msg.threadstate.writeback_reg))
+        {
+            return FAILED;
+        }
+        break;
+
+    case RemoteMessage::MSG_RPUT:
+        if (!m_threadInspector.QueuePutOperation(msg.threadstate.vtid, msg.threadstate.field, msg.threadstate.value))
+        {
+            return FAILED;
+        }
+        break;
+
     default:
         UNREACHABLE;
         break;
@@ -1722,6 +1740,23 @@ string Processor::RemoteMessage::str() const
 	   ;
 	   break;
     //FT-END
+    case MSG_RGET:
+        ss << "[threadstate inspect"
+           << " vtid " << threadstate.vtid
+           << " field " << threadstate.field
+           << " pid " << threadstate.pid
+           << " reg " << threadstate.writeback_reg.str()
+            ;
+        ss << "]";
+        break;
+    case MSG_RPUT:
+        ss << "[threadstate modify"
+           << " vtid " << threadstate.vtid
+           << " field " << threadstate.field
+           << " value " << threadstate.value
+            ;
+        ss << "]";
+        break;
     default:
         UNREACHABLE;
     }
