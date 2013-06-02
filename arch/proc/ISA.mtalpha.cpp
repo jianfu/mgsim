@@ -387,10 +387,18 @@ bool Processor::Pipeline::ExecuteStage::ExecuteINTA(PipeValue& Rcv, const PipeVa
     {
         // Addition
         case A_INTAFUNC_ADDL_V:
+            if (((int32_t)Rb > 0 && (int32_t)Ra > ((1<<31)-1) - (int32_t)Rb) ||
+                ((int32_t)Rb < 0 && (int32_t)Ra < (1<<31) - (int32_t)Rb))
+                ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_ARITH_OVERFLOW, "Overflow");
+            // Fallthrough
         case A_INTAFUNC_ADDL:   Rc = (int64_t)(int32_t)(Ra + Rb); break;
         case A_INTAFUNC_S4ADDL: Rc = (int64_t)(int32_t)((Ra << 2) + Rb); break;
         case A_INTAFUNC_S8ADDL: Rc = (int64_t)(int32_t)((Ra << 3) + Rb); break;
         case A_INTAFUNC_ADDQ_V:
+            if (((int64_t)Rb > 0 && (int64_t)Ra > ((1LL<<63)-1) - (int64_t)Rb) ||
+                ((int64_t)Rb < 0 && (int64_t)Ra < (1LL<<63) - (int64_t)Rb))
+                ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_ARITH_OVERFLOW, "Overflow");
+            // Fallthrough
         case A_INTAFUNC_ADDQ:   Rc = Ra + Rb; break;
         case A_INTAFUNC_S4ADDQ: Rc = (Ra << 2) + Rb; break;
         case A_INTAFUNC_S8ADDQ: Rc = (Ra << 3) + Rb; break;
@@ -406,10 +414,18 @@ bool Processor::Pipeline::ExecuteStage::ExecuteINTA(PipeValue& Rcv, const PipeVa
 
         // Subtract
         case A_INTAFUNC_SUBL_V:
+            if (((int32_t)Rb < 0 && (int32_t)Ra > ((1<<31)-1) + (int32_t)Rb) ||
+                ((int32_t)Rb > 0 && (int32_t)Ra < (1<<31) + (int32_t)Rb))
+                ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_ARITH_OVERFLOW, "Overflow");
+            // Fallthrough
         case A_INTAFUNC_SUBL:   Rc = (int64_t)(int32_t)(Ra - Rb); break;
         case A_INTAFUNC_S4SUBL: Rc = (int64_t)(int32_t)((Ra << 2) - Rb); break;
         case A_INTAFUNC_S8SUBL: Rc = (int64_t)(int32_t)((Ra << 3) - Rb); break;
         case A_INTAFUNC_SUBQ_V:
+            if (((int64_t)Rb < 0 && (int64_t)Ra > ((1LL<<63)-1) + (int64_t)Rb) ||
+                ((int64_t)Rb > 0 && (int64_t)Ra < (1LL<<63) + (int64_t)Rb))
+                ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_ARITH_OVERFLOW, "Overflow");
+            // Fallthrough
         case A_INTAFUNC_SUBQ:   Rc = Ra - Rb; break;
         case A_INTAFUNC_S4SUBQ: Rc = (Ra << 2) - Rb; break;
         case A_INTAFUNC_S8SUBQ: Rc = (Ra << 3) - Rb; break;
@@ -530,6 +546,10 @@ bool Processor::Pipeline::ExecuteStage::ExecuteINTM(PipeValue& Rcv, const PipeVa
     switch(func)
     {
         case A_INTMFUNC_MULL_V:
+            if ((int64_t)Ra * (int64_t)Rb > (int64_t)((1<<31)-1) ||
+                (int64_t)Ra * (int64_t)Rb < (int64_t)(1<<31))
+                ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_ARITH_OVERFLOW, "Overflow");
+            // Fallthrough
         case A_INTMFUNC_MULL:  Rc = (int64_t)(int32_t)((int32_t)Ra * (int32_t)Rb); break;
         case A_INTMFUNC_MULQ_V:
         case A_INTMFUNC_MULQ:  mul128b(Ra, Rb, NULL, &Rc); break;
