@@ -62,7 +62,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::FetchStage::OnCycle()
         catch (SimulationException& e)
         {
             if (e.GetExcp() == EXCP_NONE)
-                throw e;
+                throw;
             else
                 excp = e.GetExcp();
         }

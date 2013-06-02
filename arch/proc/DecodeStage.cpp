@@ -160,7 +160,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::DecodeStage::OnCycle()
                     << hex << "0x" << setfill('0') << setw(sizeof(Integer) * 2) << m_input.instr << dec
                     << " for F" << m_output.fid << "/T" << m_output.tid << "(" << m_input.logical_index << ")";
                 ex.AddDetails(error.str());
-                throw ex;
+                throw;
             }
             else
             {

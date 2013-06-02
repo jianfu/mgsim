@@ -110,7 +110,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::OnCycle()
     catch (SimulationException& e)
     {
         if (e.GetExcp() == EXCP_NONE)
-            throw e;
+            throw;
         else
         {
             action = PIPE_FLUSH;
