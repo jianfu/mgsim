@@ -1176,8 +1176,11 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                 case A_UTHREAD_GETAPR: COMMIT { m_output.Rcv.m_state = RST_FULL; m_output.Rcv.m_integer = m_parent.GetProcessor().ReadAPR(Rbv); } break;
                 case A_UTHREAD_CHKEX:
                 {
+                    // Needs some more arbitration logic than normally because
+                    // WB stage can do an Invoke too, and that is the same
+                    // process (pipeline).
                     TID victim;
-                    if (!m_excpTable.PopVictimThread(m_input.tid, victim))
+                    if (m_parent.m_WBActiveHandlerTableAcquired || !m_excpTable.PeekVictimThread(m_input.tid, victim))
                     {
                         DeadlockWrite("Unable to request victim thread from exception table.");
                         return PIPE_STALL;
@@ -1185,7 +1188,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
 
                     if (victim == INVALID_TID)
                     {
-                        if (!m_excpTable.p_readwrite.Invoke())
+                        if (m_parent.m_WBExceptionTableAcquired || !m_excpTable.p_readwrite.Invoke())
                         {
                             DeadlockWrite("Unable to gain write access to exception table.");
                             return PIPE_STALL;
@@ -1204,6 +1207,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                         COMMIT {
                             m_output.Rcv.m_state = RST_FULL;
                             m_output.Rcv.m_integer = victim;
+                            m_output.chkexClear = true;
                         }
                     }
                     break;

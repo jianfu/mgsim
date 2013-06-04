@@ -59,6 +59,8 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::OnCycle()
 
         // Clear remote information
         m_output.Rrc.type = RemoteMessage::MSG_NONE;
+
+        m_output.chkexClear = false;
     }
 
     // If we need to suspend on an operand, it'll be in Rav (by the Read Stage)

@@ -213,6 +213,8 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
 
         RemoteMessage Rrc;
 
+        bool chkexClear;
+
         // For debugging only
         RegAddr       Ra; // the origin of the value for a store
 
@@ -220,7 +222,7 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
             : address(0), size(0), sign_extend(false),
             Rcv(), Rc(),
             placeSize(0),
-            Rrc(), Ra() {}
+            Rrc(), chkexClear(false), Ra() {}
     };
 
     struct MemoryWritebackLatch : public Latch
@@ -230,7 +232,9 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
 
         RemoteMessage Rrc;
 
-        MemoryWritebackLatch() : Rc(), Rcv(), Rrc() {}
+        bool chkexClear;
+
+        MemoryWritebackLatch() : Rc(), Rcv(), Rrc(), chkexClear(false) {}
     };
 
     //
@@ -522,6 +526,16 @@ private:
     size_t   m_nStagesRun;
     uint64_t m_pipelineBusyTime;
     uint64_t m_nStalls;
+
+    // The entire pipeline is a single process in the simulation, and therefore
+    // errors occur when two stages try to Invoke an arbitrator in the same
+    // cycle. This would not be an issue in the actual hardware implementation,
+    // but is purely because of the design of the simulator. To fix this, the
+    // result of the invoke is stored of the WriteBack stage for both parts of
+    // the exception table, so the Execute stage will know about this and not
+    // try to Invoke at all.
+    bool m_WBActiveHandlerTableAcquired;
+    bool m_WBExceptionTableAcquired;
 };
 
 #endif

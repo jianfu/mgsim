@@ -303,13 +303,15 @@ Processor::Pipeline::PipeAction Processor::Pipeline::MemoryStage::OnCycle()
         m_output.Rc      = m_input.Rc;
         m_output.Rrc     = m_input.Rrc;
         m_output.Rcv     = rcv;
+        m_output.chkexClear = m_input.chkexClear;
 
         if (excp != EXCP_NONE)
         {
-            fprintf(stderr, "EXCP MEM STAGE!!\n");
+            m_output.excp |= excp;
+            // Overwrite some other fields
             m_output.suspend = SUSPEND_EXCEPTION;
             m_output.Rc = INVALID_REG;
-            m_output.excp |= excp;
+            m_output.Rcv.m_state = RST_INVALID;
         }
 
         // Increment counters

@@ -158,6 +158,9 @@ Result Processor::Pipeline::DoPipeline()
     Result result = FAILED;
     m_nStagesRunnable = 0;
 
+    m_WBExceptionTableAcquired = false;
+    m_WBActiveHandlerTableAcquired = false;
+
     vector<StageInfo>::reverse_iterator stage;
     try
     {

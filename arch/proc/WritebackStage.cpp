@@ -27,6 +27,11 @@ Processor::Pipeline::PipeAction Processor::Pipeline::WritebackStage::OnCycle()
 
     if (m_input.excp)
     {
+        assert(m_input.suspend == SUSPEND_EXCEPTION);
+        assert(m_input.Rrc.type == RemoteMessage::MSG_NONE);
+        assert(m_input.chkexClear == false);
+        assert(m_input.Rcv.m_state == RST_INVALID);
+
         if (!m_excpHandler.HandleException(m_input.tid, m_input.excp))
         {
             DeadlockWrite("F%u/T%u(%llu) %s writeback stall because exception handler busy",
@@ -56,7 +61,25 @@ Processor::Pipeline::PipeAction Processor::Pipeline::WritebackStage::OnCycle()
                        (unsigned)m_input.fid, (unsigned)m_input.tid, (unsigned long long)m_input.logical_index, m_input.pc_sym,
                        m_input.Rrc.str().c_str());
     }
-                    
+
+    if (m_input.chkexClear)
+    {
+        // chkex found a thread, clear it from the active handler table in the
+        // exception table. The thread ID can be found in the register.
+
+        assert(m_input.Rcv.m_state != RST_INVALID);
+
+        TID victim = m_input.Rcv.m_integer.get(m_input.Rcv.m_size);
+
+        if (!m_excpTable.RemoveVictimThread(victim))
+        {
+            DeadlockWrite("Unable to clear thread T%u from active handler table for handler T%u", victim, m_input.tid);
+            return PIPE_STALL;
+        }
+        m_parent.m_WBActiveHandlerTableAcquired = true;
+    }
+
+
     if (m_input.Rcv.m_state != RST_INVALID)
     {
         // We have something to write back
@@ -267,6 +290,10 @@ Processor::Pipeline::PipeAction Processor::Pipeline::WritebackStage::OnCycle()
         // the execute stage. If there has been an exception, don't suspend the
         // thread. Otherwise, the exception may wake this thread before it
         // actually suspends.
+        //
+        // We also need some more logic regarding arbitration than usual, since
+        // both WB and EX stage can invoke the excp table, and are seen as a
+        // single process (pipeline).
         assert(m_input.swch == true);
         TID victim;
         if (!m_excpTable.PeekVictimThread(m_input.tid, victim))
@@ -274,6 +301,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::WritebackStage::OnCycle()
             DeadlockWrite("Unable to request victim thread from exception table.");
             return PIPE_STALL;
         }
+        m_parent.m_WBActiveHandlerTableAcquired = true;
 
         if (victim != INVALID_TID)
         {
@@ -292,6 +320,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::WritebackStage::OnCycle()
                 DeadlockWrite("Unable to acquire write access to exception table.");
                 return PIPE_STALL;
             }
+            m_parent.m_WBExceptionTableAcquired = true;
             COMMIT {
                 m_excpTable[m_input.tid].chkexWaiting = true;
             }

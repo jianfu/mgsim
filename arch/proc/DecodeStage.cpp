@@ -166,6 +166,8 @@ Processor::Pipeline::PipeAction Processor::Pipeline::DecodeStage::OnCycle()
             {
                 COMMIT
                 {
+                    m_output.Ra = INVALID_REG;
+                    m_output.Rb = INVALID_REG;
                     m_output.Rc = INVALID_REG;
                     m_output.excp |= ex.GetExcp();
                     m_output.suspend = SUSPEND_EXCEPTION;

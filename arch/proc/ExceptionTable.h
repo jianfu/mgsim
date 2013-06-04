@@ -32,6 +32,7 @@ public:
     bool HasNewException(TID victim);
     bool PopVictimThread(TID handler, TID& victim);
     bool PeekVictimThread(TID handler, TID& victim);
+    bool RemoveVictimThread(TID victim);
 
     ArbitratedService<> p_readwrite;
     ArbitratedService<> p_activeHandlerTable;

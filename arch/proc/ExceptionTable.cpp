@@ -82,6 +82,23 @@ bool Processor::ExceptionTable::PeekVictimThread(TID handler, TID& victim)
     return true;
 }
 
+bool Processor::ExceptionTable::RemoveVictimThread(TID victim)
+{
+    assert(victim != INVALID_TID);
+
+    if (!p_activeHandlerTable.Invoke())
+    {
+        DeadlockWrite("Unable to acquire active handler table for write access");
+        return false;
+    }
+
+    COMMIT {
+        m_excp[victim].activeExcp = false;
+    }
+
+    return true;
+}
+
 void Processor::ExceptionTable::Cmd_Info(ostream& /*out*/, const vector<string>& /* arguments */) const
 {
     //TODO
