@@ -1778,7 +1778,7 @@ bool Processor::Allocator::QueueCreate(const RemoteMessage& msg, PID src)
     COMMIT
     {
         // Skip control and reg count words
-        family.pc    = (msg.create.address & -(MemAddr)m_icache.GetLineSize()) + 2 * sizeof(Instruction);
+        family.pc    = (msg.create.address & -(MemAddr)m_icache.GetLineSize()) + 3 * sizeof(Instruction);
         family.state = FST_CREATE_QUEUED;
     }
 
@@ -1958,7 +1958,7 @@ Result Processor::Allocator::DoFamilyCreate()
         Instruction counts;
         CID         cid;
         Result      result;
-        if ((result = m_icache.Fetch(family.pc - sizeof(Instruction), sizeof(counts), cid)) == FAILED)
+        if ((result = m_icache.Fetch(family.pc - 2*sizeof(Instruction), sizeof(counts), cid)) == FAILED)
         {
             DeadlockWrite("Unable to fetch the I-Cache line for 0x%016llx for F%u", (unsigned long long)family.pc, (unsigned)info.fid);
             return FAILED;
@@ -1994,7 +1994,7 @@ Result Processor::Allocator::DoFamilyCreate()
 
         if (family.nThreads > 0)
         {
-            if (!m_icache.Read(m_createLine, family.pc - sizeof(Instruction), &counts, sizeof(counts)))
+            if (!m_icache.Read(m_createLine, family.pc - 2*sizeof(Instruction), &counts, sizeof(counts)))
             {
                 DeadlockWrite("Unable to read the I-Cache line for 0x%016llx for F%u", (unsigned long long)family.pc, (unsigned)info.fid);
                 return FAILED;
