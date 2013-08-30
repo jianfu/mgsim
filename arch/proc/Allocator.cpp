@@ -795,6 +795,8 @@ FCapability Processor::Allocator::InitializeFamily(LFID fid) const
         family.corr_fid      = INVALID_LFID;
         family.rthreadCount  = 0;
 	family.ftmode	     = 0;  
+	family.retry	     = 0;
+	family.st_ctr 	     = 0;
         //FT-END
 
         // Dependencies
@@ -1635,6 +1637,10 @@ bool Processor::Allocator::QueueCreate(const LinkMessage& msg)
     {
         family.pc    = msg.create.address;  // Already aligned
         family.state = FST_CREATE_QUEUED;
+	//FT-begin
+	family.retry = msg.create.retry;
+	family.st_ctr= msg.create.st_ctr;
+	//FT-end
     }
 
     for (size_t i = 0; i < NUM_REG_TYPES; ++i)
@@ -1990,7 +1996,9 @@ Result Processor::Allocator::DoFamilyCreate()
         Family& family = m_familyTable[info.fid];
 
         // Read the register counts from the cache-line
-        Instruction counts;
+        //Instruction counts;
+	uint64_t counts; //[FT] Read the register counts and retry para. from the cache-line
+	Instruction retry;
 
         if (family.nThreads > 0)
         {
@@ -2005,12 +2013,17 @@ Result Processor::Allocator::DoFamilyCreate()
                 DeadlockWrite("Unable to release cache line for F%u", (unsigned)info.fid);
                 return FAILED;
             }
-            counts = UnserializeInstruction(&counts);
+	    //FT-begin
+	    Instruction retry_counts = counts >> 32;
+	    retry = UnserializeInstruction(&retry_counts);
+	    counts = UnserializeInstruction(&counts);
+	    //FT-end
         }
         else
         {
             // Empty family, reduce all counts to 0.
             counts = 0;
+	    retry  = 0; //FT
         }
 
         COMMIT
@@ -2041,6 +2054,11 @@ Result Processor::Allocator::DoFamilyCreate()
                 family.regs[i].base  = INVALID_REG_INDEX;
                 family.regs[i].count = regcounts[i];
             }
+
+	    //FT-begin
+	    family.retry  = retry & 0x1;
+	    family.st_ctr = retry >> 1;
+	    //FT-end
 
             family.hasShareds = hasShareds;
         }
@@ -2109,6 +2127,8 @@ Result Processor::Allocator::DoFamilyCreate()
             //this core is the 1st core in the place
             //if it is an odd core, it is a redundnat family; or it is a master family.
             msg.redundant       = (bool)(m_parent.GetPID() % 2);
+	    msg.create.retry	= family.retry;
+	    msg.create.st_ctr	= family.st_ctr;
             //FT-END
 			
             for (size_t i = 0; i < NUM_REG_TYPES; i++)

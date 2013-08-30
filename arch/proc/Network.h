@@ -201,6 +201,8 @@ struct LinkMessage
             PSize    numCores;
             MemAddr  address;
             RegsNo   regs[NUM_REG_TYPES];
+	    bool     retry;
+	    uint8_t  st_ctr;
         } create;
 
         struct
