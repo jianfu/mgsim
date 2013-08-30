@@ -641,7 +641,6 @@ bool Processor::Allocator::DecreaseThreadDependency(TID tid, ThreadDependency de
             COMMIT
 	    {
 		thread.waitingForWrites = false;
-		thread.store_ctr++;
 	    }
         }
 	else if (thread.state == TST_STORE)
@@ -652,10 +651,12 @@ bool Processor::Allocator::DecreaseThreadDependency(TID tid, ThreadDependency de
             {
                 return false;
             }
-            COMMIT{ thread.store_ctr++; }
 	}
-	else
-	     COMMIT{ thread.store_ctr++; }
+
+	COMMIT{
+	    if (family.ftmode)
+		thread.store_ctr++;
+	}
 
     case THREADDEP_PREV_CLEANED_UP:
     case THREADDEP_TERMINATED:

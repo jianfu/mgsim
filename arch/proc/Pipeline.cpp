@@ -88,7 +88,7 @@ Processor::Pipeline::Pipeline(
     bypasses.push_back(BypassInfo(m_emLatch.empty, m_emLatch.Rc, m_emLatch.Rcv));
 
     // Create the Memory stage
-    m_stages[4].stage  = new MemoryStage(*this, clock, m_emLatch, m_mwLatch, dcache, alloc, config);
+    m_stages[4].stage  = new MemoryStage(*this, clock, m_emLatch, m_mwLatch, dcache, alloc, familyTable, threadTable, config);
     m_stages[4].input  = &m_emLatch;
     m_stages[4].output = &m_mwLatch;
     bypasses.push_back(BypassInfo(m_mwLatch.empty, m_mwLatch.Rc, m_mwLatch.Rcv));

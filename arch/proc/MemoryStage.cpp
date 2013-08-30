@@ -52,6 +52,15 @@ Processor::Pipeline::PipeAction Processor::Pipeline::MemoryStage::OnCycle()
                 {
                     result = mmio.Write(m_input.address, data, m_input.size, m_input.fid, m_input.tid);
                     
+		    //FT-begin
+		    Thread& thread = m_threadTable[m_input.tid];
+		    Family& family = m_familyTable[thread.family];
+		    COMMIT{
+			if (family.ftmode)
+			    thread.store_ctr++;
+		    }
+		    //FT-end
+
                     if (result == FAILED)
                     {
                         DeadlockWrite("F%u/T%u(%llu) %s stall (I/O store *%#.*llx/%zd <- %s)",
@@ -292,11 +301,13 @@ Processor::Pipeline::PipeAction Processor::Pipeline::MemoryStage::OnCycle()
     return PIPE_CONTINUE;
 }
 
-Processor::Pipeline::MemoryStage::MemoryStage(Pipeline& parent, Clock& clock, const ExecuteMemoryLatch& input, MemoryWritebackLatch& output, DCache& dcache, Allocator& alloc, Config& /*config*/)
+Processor::Pipeline::MemoryStage::MemoryStage(Pipeline& parent, Clock& clock, const ExecuteMemoryLatch& input, MemoryWritebackLatch& output, DCache& dcache, Allocator& alloc, FamilyTable& familyTable, ThreadTable& threadTable, Config& /*config*/)
     : Stage("memory", parent, clock),
       m_input(input),
       m_output(output),
       m_allocator(alloc),
+      m_familyTable(familyTable),
+      m_threadTable(threadTable),
       m_dcache(dcache),
       m_loads(0),
       m_stores(0),

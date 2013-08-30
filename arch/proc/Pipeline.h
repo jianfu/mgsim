@@ -404,6 +404,8 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
         const ExecuteMemoryLatch& m_input;
         MemoryWritebackLatch&     m_output;
         Allocator&                m_allocator;
+	FamilyTable&              m_familyTable;
+        ThreadTable&              m_threadTable;
         DCache&                   m_dcache;
         uint64_t                  m_loads;         // nr of successful loads
         uint64_t                  m_stores;        // nr of successful stores
@@ -412,7 +414,7 @@ class Pipeline : public Object, public Inspect::Interface<Inspect::Read>
 
         PipeAction OnCycle();
     public:
-        MemoryStage(Pipeline& parent, Clock& clock, const ExecuteMemoryLatch& input, MemoryWritebackLatch& output, DCache& dcache, Allocator& allocator, Config& config);
+        MemoryStage(Pipeline& parent, Clock& clock, const ExecuteMemoryLatch& input, MemoryWritebackLatch& output, DCache& dcache, Allocator& allocator, FamilyTable& familyTable, ThreadTable& threadTable, Config& config);
         void addMemStatistics(uint64_t& nr, uint64_t& nw, uint64_t& nrb, uint64_t& nwb) const
         { nr += m_loads; nw += m_stores; nrb += m_load_bytes; nwb += m_store_bytes; }
     };
