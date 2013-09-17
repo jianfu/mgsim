@@ -330,7 +330,7 @@ bool Processor::Allocator::AllocateThread(LFID fid, TID tid, bool isNewlyAllocat
     thread->mtid             = INVALID_TID;
     thread->regIndex         = INVALID_REG_INDEX;
     thread->cleanupFlag      = 0;
-    thread->store_ctr        = 1;
+    thread->store_ctr        = 1024;
     //FT-END
 
     // Initialize dependencies
@@ -2059,6 +2059,11 @@ Result Processor::Allocator::DoFamilyCreate()
 	    //FT-begin
 	    family.retry  = retry & 0x1;
 	    family.st_ctr = retry >> 1;
+	    if (family.st_ctr > 4)  //the maximun write within a thread
+	    {
+		family.retry = 0;
+		family.st_ctr = 0;
+	    }
 	    //FT-end
 
             family.hasShareds = hasShareds;

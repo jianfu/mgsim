@@ -31,7 +31,7 @@ CompBuffer::CompBuffer(const std::string& name,
     m_firstregistered(false),
     m_firstregistered_dcache(false),
     m_incoming       ("b_incoming",  *this, clock, config.getValueOrDefault<BufferSize>(*this, "IncomingBufferSize", 1)),
-    m_outgoing       ("b_outgoing",  *this, clock, config.getValueOrDefault<BufferSize>(*this, "OutgoingBufferSize", 1)),
+    m_outgoing       ("b_outgoing",  *this, clock, config.getValueOrDefault<BufferSize>(*this, "OutgoingBufferSize", 1), 8),
     p_Incoming       (*this, "incoming",     delegate::create<CompBuffer, &CompBuffer::DoIncoming>(*this) ),
     p_Outgoing       (*this, "outgoing",      delegate::create<CompBuffer, &CompBuffer::DoOutgoing>(*this) ),
     m_registry       (config),
@@ -181,7 +181,11 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
     MCID            temp_client = 0;
     WClientID       temp_wid = 0;
 
-    DebugMemWrite("Write to cb%u: %#016llx, from %u", (unsigned)m_mcid, (unsigned long long)address, (unsigned)(id & 1));
+    WClientID	    real_wid = wid >> 4;
+    uint8_t	    st_ctr = (wid >> 1) & 0x7;
+    bool	    retry = wid & 1;
+
+    DebugMemWrite("Write to cb%u: %#016llx, from %u, real_wid = %u, wid = %u", (unsigned)m_mcid, (unsigned long long)address, (unsigned)(id & 1), (unsigned)real_wid, (unsigned)wid);
 
     TID mtid = (id >> 3) & ((1 << m_bufferindexbits) - 1);
     bool coming_from_right = (id >> 1) & 1;
@@ -198,8 +202,104 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
         line.data       = data;
         line.redundant  = redundant;
         line.client	= real_mcid;
-        line.wid        = wid;
+        line.wid        = real_wid;
+	line.comp	= 0;
 
+	//It is a recovrable thread.
+	//All stores are buffered until they are all checked.
+	if (retry)
+	{
+	    if(m_compBuffer[mtid].empty())
+	    {
+		COMMIT{ m_compBuffer[mtid].push_back(line); }
+		DebugMemWrite("Write to buffer of cb%u: %#016llx, empty. This is a recoverable thread.", (unsigned)m_mcid, (unsigned long long)address);
+		return true;
+	    }
+	    else
+	    {
+		uint8_t count = 0;
+		bool flag = 0;
+
+		for (request_buffer::iterator p = m_compBuffer[mtid].begin(); p != m_compBuffer[mtid].end(); ++p)
+		{
+		    COMMIT {count ++;}
+
+		    //current write and p come from different thread, and p is not compared.
+		    if(p->redundant != redundant && !p->comp)
+		    {	//compare
+			if(p->address == address) //compare address
+			{
+			    for(size_t i = 0; i < m_lineSize; i++)  //Compare mask first
+			    {
+				if(line.data.mask[i] != p->data.mask[i])
+				{
+				    throw exceptf<SimulationException>(*this, "cb%u: %#016llx, Comparison failed because of mask!", (unsigned)m_mcid, (unsigned long long)address);
+				    //return false;  //Error.  Mask are not same.
+				}
+			    }
+
+			    //Mask are same.
+			    for(size_t i = 0; i < m_lineSize; i++)
+			    {
+				if(line.data.mask[i]) //Only compare the valid data.
+				{
+				    if (line.data.data[i] != p->data.data[i]) //An error is detected.
+				    {
+					throw exceptf<SimulationException>(*this, "cb%u: %#016llx, Comparison failed because of data!", (unsigned)m_mcid, (unsigned long long)address);
+					//return false; //Error. Data are not same.
+					//We need to flush L1 and CB...
+				    }
+				}
+			    }
+
+			    //Comparison success!
+			    COMMIT{
+				p->comp	    = 1;
+				p->client1  = line.client;
+				p->wid1	    = line.wid;
+				flag	    = 1;
+			    }
+
+			    break;
+			}
+			else
+			{
+			    //Address are not same.
+			    throw exceptf<SimulationException>(*this, "cb%u: %#016llx, Comparison failed because of address!", (unsigned)m_mcid, (unsigned long long)address);
+			}
+		    }
+		}
+
+		if (!flag) //There is no comparison after traversing the buffer.
+		{
+		    COMMIT{ m_compBuffer[mtid].push_back(line); }
+		}
+		else if (count == st_ctr) //the last store is just compared.
+		{
+		    for (size_t i = 0; i < count; i++)
+		    {
+			const Line& templine = m_compBuffer[mtid].front();
+
+			Request request;
+			request.write     = true;
+			request.address   = templine.address;
+			request.data      = templine.data;
+			request.wid       = (templine.wid1 << 24) | (templine.client1 << 16) | (templine.wid << 8) | templine.client;     //wid contains the client index for l1 in CB (id)
+
+			if (!m_outgoing.Push(request))
+			{
+			    DeadlockWrite("Unable to push request to outgoing buffer, CB.");
+			    return false;
+			}
+
+			COMMIT{ m_compBuffer[mtid].pop_front(); }
+		    }
+		}
+	    }
+	    return true;
+	}
+
+	//It is a non-recovrable thread.
         //printf ("addr=0x%016llx, mcid=%u\n", (unsigned long long)address, (unsigned)id);
         DebugMemWrite("Write to cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)address);
 
@@ -287,7 +387,7 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
     //wid0 | client0 | wid1 | client1
     //0 is the current client who call this function
     //1 is the client of the line in CB
-    request.wid               = (wid << 24) | ((id >> (m_bufferindexbits + 3)) << 16) | (temp_wid << 8) | temp_client;     //wid contains the client index for l1 in CB (id)
+    request.wid               = (real_wid << 24) | ((id >> (m_bufferindexbits + 3)) << 16) | (temp_wid << 8) | temp_client;     //wid contains the client index for l1 in CB (id)
     if (!m_outgoing.Push(request))
     {
         DeadlockWrite("Unable to push request to outgoing buffer, CB.");
@@ -544,8 +644,8 @@ void CompBuffer::Cmd_Read(std::ostream& out, const std::vector<std::string>& arg
         return;
     }
 
-    out << "SETid  |  Id  |       Address       |                        Data                     |  flag  " << endl;
-    out << "-------+------+---------------------+-------------------------------------------------+--------" << endl;
+    out << "SETid  |  Id  |  comp  |       Address       |                        Data                     |  flag  " << endl;
+    out << "-------+------+--------+---------------------+-------------------------------------------------+--------" << endl;
     for (size_t mtid = 0; mtid < compBuffer->size(); ++mtid)
     {
         int i = 0;
@@ -554,6 +654,7 @@ void CompBuffer::Cmd_Read(std::ostream& out, const std::vector<std::string>& arg
             out << hex << mtid;
             out << "      |"
                 << setw(6) << setfill(' ') << left << i << dec << "|"
+				<< setw(8) << setfill(' ') << left << p->comp << "|"
                 << hex << "0x" << setw(16) << setfill('0') << p->address << "   |";
 
             out << hex << setfill('0');
@@ -572,11 +673,11 @@ void CompBuffer::Cmd_Read(std::ostream& out, const std::vector<std::string>& arg
                 out << " |";
 
                 if (y + BYTES_PER_LINE < m_lineSize)
-                    out << endl << "       |      |                     |";
+                    out << endl << "       |      |        |                     |";
             }
 
             out<< p->redundant << endl;
-            out << "-------+------+---------------------+-------------------------------------------------+--------" << endl;
+            out << "-------+------+--------+---------------------+-------------------------------------------------+--------" << endl;
             i++;
         }
     }

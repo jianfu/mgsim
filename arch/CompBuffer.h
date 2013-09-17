@@ -21,6 +21,9 @@ namespace Simulator
             bool            redundant;
             MCID            client;
             WClientID       wid;
+			MCID			client1;
+			WClientID       wid1;
+			bool			comp;
         };
 
         struct Request

@@ -739,7 +739,7 @@ Result Processor::DCache::DoOutgoingRequests()
         mtid = request.wid;
 
     MCID mcid = m_mcid |  (mtid << 3) | (family.redundant << 2);  //override bit 2 and tid (bit 3 - log2(#tt))
-
+    WClientID wid = (request.wid << 4) | (family.st_ctr << 1) | family.retry;
     //if it is out of FT scope, tag this write as non-dcache, write pass through cb
     if(!family.ftmode && (mcid & 1))
 	mcid = mcid - 1;
@@ -747,13 +747,13 @@ Result Processor::DCache::DoOutgoingRequests()
 	
     if (request.write)
     {
-        if (!m_memory.Write(mcid, request.address, request.data, request.wid))
+        if (!m_memory.Write(mcid, request.address, request.data, wid))
         {
             DeadlockWrite("Unable to send write to 0x%016llx to memory", (unsigned long long)request.address);
             return FAILED;
         }
         //FT-BEGIN
-        DebugMemWrite("Write to cb from dcache m_outgoing: %#016llx, ftmode = %u, mcid = %u", (unsigned long long)request.address, (unsigned)family.ftmode, (unsigned)mcid);
+        DebugMemWrite("Write to cb from dcache m_outgoing: %#016llx, ftmode = %u, mcid = %u, request.wid = %u, wid = %u", (unsigned long long)request.address, (unsigned)family.ftmode, (unsigned)mcid, (unsigned)request.wid, (unsigned)wid);
         //FT-END
     }
     else
