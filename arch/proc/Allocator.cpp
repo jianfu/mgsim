@@ -331,6 +331,8 @@ bool Processor::Allocator::AllocateThread(LFID fid, TID tid, bool isNewlyAllocat
     thread->regIndex         = INVALID_REG_INDEX;
     thread->cleanupFlag      = 0;
     thread->store_ctr        = 1024;
+    thread->retry	     = family->retry;
+    thread->recover	     = 0;
     //FT-END
 
     // Initialize dependencies
@@ -535,6 +537,7 @@ bool Processor::Allocator::DecreaseFamilyDependency(LFID fid, Family& family, Fa
                 msg.type        = LinkMessage::MSG_DONE;
                 msg.done.fid    = family.link;
                 msg.done.broken = family.broken;
+		msg.done.error	= family.error;
                 //FT-BEGIN
                 msg.redundant   = family.redundant;
                 //FT-END
@@ -557,6 +560,7 @@ bool Processor::Allocator::DecreaseFamilyDependency(LFID fid, Family& family, Fa
                 info.pid = family.sync.pid;
                 info.reg = family.sync.reg;
                 info.broken = family.broken;
+		info.error  = family.error;
 
                 if (!m_network.SendSync(info))
                 {
@@ -602,6 +606,98 @@ bool Processor::Allocator::DecreaseFamilyDependency(LFID fid, Family& family, Fa
 bool Processor::Allocator::OnMemoryRead(LFID fid)
 {
     COMMIT{ m_familyTable[fid].dependencies.numPendingReads++; }
+    return true;
+}
+
+bool Processor::Allocator::ReExecThread(TID tid)
+{
+    Thread& thread = m_threadTable[tid];
+    Family& family = m_familyTable[thread.family];
+
+    //reset thread context
+    thread.pc		= family.pc;
+    thread.recover	= 1;
+
+    thread.dependencies.killed		    	= false;
+    thread.dependencies.numPendingWrites	= 0;
+    thread.dependencies.rThreadDone	    	= 0;
+
+    thread.store_ctr		= 1024;
+    thread.retry 	    	= 0;
+    thread.waitingForWrites	= false;
+
+    COMMIT{printf("%08lld: C%uF%uT%u is restarting...\n", (unsigned long long)GetKernel()->GetCycleNo()/4, (unsigned)m_parent.GetPID(), (unsigned)thread.family, (unsigned)tid);}
+
+    //clear the local registers, if any
+    for (size_t i = 0; i < NUM_REG_TYPES; i++)
+    {
+	if (family.regs[i].count.locals > 0)
+	{
+	    if (!m_registerFile.Clear(MAKE_REGADDR((RegType)i, thread.regs[i].locals), family.regs[i].count.locals))
+	    {
+		DeadlockWrite("F%u/T%u(%llu) unable to clear the loacl registers before thread re-execution",
+						  (unsigned)thread.family, (unsigned)tid, (unsigned long long)thread.index);
+		return false;
+	   }
+	}
+    }
+
+    // Write L0 to the register file
+    if (family.regs[RT_INTEGER].count.locals > 0)
+    {
+        RegAddr  addr = MAKE_REGADDR(RT_INTEGER, thread.regs[RT_INTEGER].locals);
+        RegValue data;
+
+        if (!m_registerFile.p_asyncW.Write(addr))
+        {
+            DeadlockWrite("F%u/T%u(%llu) %s unable to acquire RF port to write",
+                          (unsigned)thread.family, (unsigned)tid, (unsigned long long)thread.index,
+                          addr.str().c_str());
+            return false;
+        }
+
+        if (!m_registerFile.ReadRegister(addr, data))
+        {
+            DeadlockWrite("F%u/T%u(%llu) %s unable to read index register",
+                          (unsigned)thread.family, (unsigned)tid, (unsigned long long)thread.index,
+                          addr.str().c_str());
+            return false;
+        }
+
+        assert(data.m_state != RST_WAITING);
+        if (data.m_state == RST_PENDING)
+        {
+            DeadlockWrite("F%u/T%u(%llu) %s index register pending",
+                          (unsigned)thread.family, (unsigned)tid, (unsigned long long)thread.index,
+                          addr.str().c_str());
+            return false;
+        }
+
+        data.m_state   = RST_FULL;
+        data.m_integer = thread.index;
+
+        if (!m_registerFile.WriteRegister(addr, data, false))
+        {
+            DeadlockWrite("F%u/T%u(%llu) %s unable to write index register",
+                          (unsigned)thread.family, (unsigned)tid, (unsigned long long)thread.index,
+                          addr.str().c_str());
+            return false;
+        }
+
+        DebugSimWrite("F%u/T%u(%llu) %s wrote index register",
+                      (unsigned)thread.family, (unsigned)tid, (unsigned long long)thread.index,
+                      addr.str().c_str());
+    }
+
+    //activate thread
+    ThreadQueue tq = {tid, tid};
+    assert (tid != INVALID_TID);
+    if (!ActivateThreads(tq))
+    {
+        DeadlockWrite("F%u/T%u unable to re-execute", (unsigned)thread.family, (unsigned)tid);
+        return false;
+    }
+
     return true;
 }
 
@@ -798,6 +894,7 @@ FCapability Processor::Allocator::InitializeFamily(LFID fid) const
 	family.ftmode	     = 0;  
 	family.retry	     = 0;
 	family.st_ctr 	     = 0;
+	family.error	     = 0;
         //FT-END
 
         // Dependencies
@@ -1833,7 +1930,7 @@ Result Processor::Allocator::DoBundle()
 
         // [FT] FIXME: There is a potential bug, which TID is 0. 
 
-        if ((result = m_dcache.Read(info.addr, m_bundleData, sizeof(Integer) * 2 + sizeof(MemAddr), 0, 0)) == FAILED)
+        if ((result = m_dcache.Read(info.addr, m_bundleData, sizeof(Integer) * 2 + sizeof(MemAddr), 0, 0, 0)) == FAILED)
         {
             DeadlockWrite("Unable to fetch the D-Cache line for %#016llx for bundle creation", (unsigned long long)info.addr);
             return FAILED;

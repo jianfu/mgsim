@@ -66,6 +66,7 @@ struct RemoteMessage
         struct {
             FID      fid;           ///< Family to sync on
             RegIndex completion_reg;///< Register to write sync-completion to
+	    bool     error;
         } sync;
 
         struct {
@@ -209,6 +210,7 @@ struct LinkMessage
         {
             LFID fid;
             bool broken;
+	    bool error;
         } done;
 
         struct
@@ -216,6 +218,7 @@ struct LinkMessage
             LFID     fid;
             PID      completion_pid;
             RegIndex completion_reg;
+	    bool     error;
         } sync;
 
         struct
@@ -375,6 +378,7 @@ public:
         PID      pid;
         RegIndex reg;
         bool     broken;
+	bool	 error;
     };
 
     Network(const std::string& name, Processor& parent, Clock& clock, const std::vector<Processor*>& grid, Allocator& allocator, RegisterFile& regFile, FamilyTable& familyTable, Config& config);
@@ -403,7 +407,7 @@ private:
     bool WriteRegister(LFID fid, RemoteRegType kind, const RegAddr& raddr, const RegValue& value);
     bool OnDetach(LFID fid);
     bool OnBreak(LFID fid);
-    bool OnSync(LFID fid, PID completion_pid, RegIndex completion_reg);
+    bool OnSync(LFID fid, PID completion_pid, RegIndex completion_reg, bool error);
     bool OnPair(LFID mlfid, PID completion_pid, RegIndex completion_reg, Integer first_fid, LFID next_rlfid);
 
     // Processes

@@ -23,6 +23,11 @@ Processor::Pipeline::PipeAction Processor::Pipeline::MemoryStage::OnCycle()
         // It's a new memory operation!
         assert(m_input.size <= sizeof(uint64_t));
 
+	//FT-begin
+	Thread& thread = m_threadTable[m_input.tid];
+	Family& family = m_familyTable[thread.family];
+	//FT-end
+
         Result result = SUCCESS;
         if (rcv.m_state == RST_FULL)
         {
@@ -42,9 +47,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::MemoryStage::OnCycle()
                 case RT_FLOAT:   value = m_input.Rcv.m_float.toint(m_input.Rcv.m_size); break;
                 default: assert(0);
                 }
-                
-                
-                
+
                 SerializeRegister(m_input.Rc.type, value, data, (size_t)m_input.size);
                 
                 IOMatchUnit& mmio = m_parent.GetProcessor().GetIOMatchUnit();
@@ -53,8 +56,6 @@ Processor::Pipeline::PipeAction Processor::Pipeline::MemoryStage::OnCycle()
                     result = mmio.Write(m_input.address, data, m_input.size, m_input.fid, m_input.tid);
                     
 		    //FT-begin
-		    Thread& thread = m_threadTable[m_input.tid];
-		    Family& family = m_familyTable[thread.family];
 		    COMMIT{
 			if (family.ftmode)
 			    thread.store_ctr++;
@@ -74,7 +75,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::MemoryStage::OnCycle()
                 }
                 else
                 {
-                    // Normal request to memory
+		    // Normal request to memory
                     if ((result = m_dcache.Write(m_input.address, data, m_input.size, m_input.fid, m_input.tid)) == FAILED)
                     {
                         // Stall
@@ -193,7 +194,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::MemoryStage::OnCycle()
                     else
                     {
                         // Normal read from memory.
-                        result = m_dcache.Read(m_input.address, data, m_input.size, &reg, m_input.tid /*[FT]*/);
+                        result = m_dcache.Read(m_input.address, data, m_input.size, &reg, m_input.tid, thread.recover /*[FT]*/);
                 
                         switch(result)
                         {

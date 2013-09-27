@@ -121,7 +121,7 @@ public:
     ArbitratedService<> p_service;
 
     // Public interface
-    Result Read (MemAddr address, void* data, MemSize size, RegAddr* reg, TID tid /*[FT]*/);
+    Result Read (MemAddr address, void* data, MemSize size, RegAddr* reg, TID tid, bool recover /*[FT]*/);
     Result Write(MemAddr address, void* data, MemSize size, LFID fid, TID tid);
 
     size_t GetLineSize() const { return m_lineSize; }

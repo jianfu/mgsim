@@ -67,6 +67,8 @@ struct Thread
     RegIndex     regIndex;   //register index of Rc in 'allocate' of its corresponding redundant thread
     bool         cleanupFlag;  //shows the thread is pushed into m_cleanup once or not 
     uint32_t     store_ctr;
+    bool		 retry;
+    bool		 recover;
     //FT-END
 
     // Architecture specific per-thread stuff

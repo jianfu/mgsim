@@ -139,6 +139,7 @@ public:
     bool FindReadyThread(LFID fid, TID mtid, uint64_t index);
     bool SetRegIndex(TID tid, RegIndex index);
     bool SendRmtwr(TID tid, FID fid);
+    bool ReExecThread(TID tid);
     //FT-END
 
     // Helpers

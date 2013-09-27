@@ -179,7 +179,7 @@ Result Processor::DCache::FindLine(MemAddr address, Line* &line, bool check_only
 
 
 
-Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg, TID tid /*[FT]*/)
+Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAddr* reg, TID tid, bool recover/*[FT]*/)
 {
     size_t offset = (size_t)(address % m_lineSize);
     if (offset + size > m_lineSize)
@@ -252,7 +252,7 @@ Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAdd
                 ++m_numResolvedConflicts;
         }
     }
-    else
+    else if (!recover)
     {
         // Check if the data that we want is valid in the line.
         // This happens when the line is FULL, or LOADING and has been
@@ -269,7 +269,7 @@ Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAdd
         if (i == size)
         {
             // Data is entirely in the cache, copy it
-            COMMIT
+	    COMMIT
             {
                 memcpy(data, line->data + offset, (size_t)size);
                 ++m_numRHits;
@@ -288,6 +288,45 @@ Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAdd
         {
             COMMIT{ ++m_numLoadingRMisses; }
         }
+    }
+    else // read hit for recovering thread
+    {
+	assert (recover == 1);
+	assert (line->state != LINE_EMPTY);
+
+	COMMIT
+	{
+	    line->state		    = LINE_LOADING;
+	    line->processing	    = false;
+	    std::fill(line->valid, line->valid+m_lineSize, false);
+
+	    if (reg != NULL && reg->valid())
+	    {
+		// We're loading to a valid register, queue it
+		RegAddr old   = line->waiting;
+		line->waiting = *reg;
+		*reg = old;
+	    }
+	    else
+	    {
+		line->create  = true;
+	    }
+	}
+
+	//Send read request to memory as read miss in DCache
+	Request request;
+        request.write     = false;
+        request.address   = address - offset;
+        request.wid       = tid;
+
+        if (!m_outgoing.Push(request))
+        {
+            ++m_numStallingRMisses;
+            DeadlockWrite("Unable to push request to outgoing buffer");
+            return FAILED;
+        }
+
+	return DELAYED;
     }
 
     // Data is being loaded, add request to the queue
@@ -430,7 +469,6 @@ bool Processor::DCache::OnMemoryReadCompleted(MemAddr addr, const char* data, MC
 	    if ((!p->write) && p->address == addr)  //read still in outgoing buffer, ignore it
 		return true;
 	}
-		
         // Registers are waiting on this data
         COMMIT
         {
@@ -703,14 +741,39 @@ Result Processor::DCache::DoIncomingResponses()
     const Response& response = m_incoming.Front();
     if (response.write)
     {
-        if (!m_allocator.DecreaseThreadDependency((TID)response.wid, THREADDEP_OUTSTANDING_WRITES))
-        {
-            DeadlockWrite("Unable to decrease outstanding writes on T%u", (unsigned)response.wid);
-            return FAILED;
-        }
+	WClientID temp_wid  = 0;
+	WClientID flag	    = 0;
 
-        DebugMemWrite("T%u completed store", (unsigned)response.wid);
+	flag	    = response.wid >> 8;
+	temp_wid    = response.wid & 0xff;
 
+	if (flag == 1) //recoverable thread
+	{
+	    if (!m_allocator.ReExecThread(temp_wid))
+            {
+                DeadlockWrite("Unable to re-execute thread %u", (unsigned)temp_wid);
+                return FAILED;
+            }
+	}
+	else if (flag == 2) //non-recoverable thread
+	{
+	    Thread& thread = m_threadTable[temp_wid];
+	    Family& family = m_familyTable[thread.family];
+
+	    family.error = 1;
+
+	    //FIX ME: this thread and family should be terminated as soon as possible
+	}
+	else if (flag == 0) //noraml write completion
+	{
+	    if (!m_allocator.DecreaseThreadDependency((TID)response.wid, THREADDEP_OUTSTANDING_WRITES))
+	    {
+		DeadlockWrite("Unable to decrease outstanding writes on T%u", (unsigned)response.wid);
+		return FAILED;
+	    }
+
+	    DebugMemWrite("T%u completed store", (unsigned)response.wid);
+	}
     }
     else
     {
@@ -739,7 +802,7 @@ Result Processor::DCache::DoOutgoingRequests()
         mtid = request.wid;
 
     MCID mcid = m_mcid |  (mtid << 3) | (family.redundant << 2);  //override bit 2 and tid (bit 3 - log2(#tt))
-    WClientID wid = (request.wid << 4) | (family.st_ctr << 1) | family.retry;
+    WClientID wid = (request.wid << 4) | (family.st_ctr << 1) | thread.retry;
     //if it is out of FT scope, tag this write as non-dcache, write pass through cb
     if(!family.ftmode && (mcid & 1))
 	mcid = mcid - 1;

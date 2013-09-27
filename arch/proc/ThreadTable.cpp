@@ -216,8 +216,8 @@ void Processor::ThreadTable::Cmd_Read(ostream& out, const vector<string>& argume
     else
     {
 
-        out << "    |         PC         | Fam | Index | Next | PC/K | State     |  mtid  | st | Symbol" << endl; //[FT]
-        out << "----+--------------------+-----+-------+------+------+-----------+--------+----+---------" << endl;
+        out << "    |         PC         | Fam |    Index    | Next | PC/K | State     |  mtid  |   st   | retry | recover | Symbol" << endl; //[FT]
+        out << "----+--------------------+-----+-------------+------+------+-----------+--------+--------+-------+---------+---------" << endl;
         for (set<TID>::const_iterator p = tids.begin(); p != tids.end(); ++p)
         {
             out << right << dec << setw(3) << setfill(' ') << *p << " | ";
@@ -239,6 +239,8 @@ void Processor::ThreadTable::Cmd_Read(ostream& out, const vector<string>& argume
                     // FT-BEGIN
                     << " | " << left << dec << setw (6) << setfill(' ') << (int)thread.mtid 
                     << " | " << dec << setw (6) << setfill(' ') << thread.store_ctr
+		    << " | " << dec << setw (5) << setfill(' ') << thread.retry
+		    << " | " << dec << setw (7) << setfill(' ') << thread.recover
                     // FT-END
                     << " | " << symtable[thread.pc];
             }

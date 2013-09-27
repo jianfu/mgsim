@@ -442,6 +442,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecSync(cons
             m_output.Rrc.type                = RemoteMessage::MSG_SYNC;
             m_output.Rrc.sync.fid            = fid;
             m_output.Rrc.sync.completion_reg = m_input.Rc.index;
+	    m_output.Rrc.sync.error	     = 0;
 
             m_output.Rcv = MAKE_PENDING_PIPEVALUE(m_input.RcSize);
         }

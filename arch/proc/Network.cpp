@@ -326,7 +326,8 @@ Result Processor::Network::DoSyncs()
     msg.rawreg.pid             = info.pid;
     msg.rawreg.addr            = MAKE_REGADDR(RT_INTEGER, info.reg);
     msg.rawreg.value.m_state   = RST_FULL;
-    msg.rawreg.value.m_integer = (int)info.broken;
+    //msg.rawreg.value.m_integer = (int)info.broken;
+    msg.rawreg.value.m_integer = (int)info.error;  //report error to sw
 
     if (!SendMessage(msg))
     {
@@ -653,7 +654,7 @@ bool Processor::Network::OnPair(LFID mlfid, PID completion_pid, RegIndex complet
     return true;
 }
 	
-bool Processor::Network::OnSync(LFID fid, PID completion_pid, RegIndex completion_reg)
+bool Processor::Network::OnSync(LFID fid, PID completion_pid, RegIndex completion_reg, bool error)
 {
     Family& family = m_familyTable[fid];
     if (family.link != INVALID_LFID)
@@ -666,6 +667,7 @@ bool Processor::Network::OnSync(LFID fid, PID completion_pid, RegIndex completio
         fwd.sync.completion_reg = completion_reg;
         //FT-BEGIN
         fwd.redundant           = family.redundant;
+	fwd.sync.error		= error | family.error;
         //FT-END
 
         if (!SendMessage(fwd))
@@ -697,6 +699,7 @@ bool Processor::Network::OnSync(LFID fid, PID completion_pid, RegIndex completio
         info.pid = completion_pid;
         info.reg = completion_reg;
         info.broken = family.broken;
+	info.error = family.error | error;
 
         COMMIT{ family.dependencies.syncSent = false; }
 
@@ -922,7 +925,7 @@ Result Processor::Network::DoDelegationIn()
     case RemoteMessage::MSG_SYNC:
         // Authorize family access
         m_allocator.GetFamilyChecked(msg.sync.fid.lfid, msg.sync.fid.capability);
-        if (!OnSync(msg.sync.fid.lfid, dmsg.src, msg.sync.completion_reg))
+        if (!OnSync(msg.sync.fid.lfid, dmsg.src, msg.sync.completion_reg, msg.sync.error))
         {
             return FAILED;
         }
@@ -1202,7 +1205,11 @@ Result Processor::Network::DoLink()
     {
         Family& family = m_familyTable[msg.done.fid];
 
-        COMMIT { family.broken |= msg.done.broken; }
+        COMMIT
+	{
+	    family.broken |= msg.done.broken;
+	    family.error |= msg.done.error;
+	}
 
         if (!m_allocator.DecreaseFamilyDependency(msg.done.fid, FAMDEP_PREV_SYNCHRONIZED))
         {
@@ -1212,7 +1219,7 @@ Result Processor::Network::DoLink()
         break;
     }
     case LinkMessage::MSG_SYNC:
-        if (!OnSync(msg.sync.fid, msg.sync.completion_pid, msg.sync.completion_reg))
+        if (!OnSync(msg.sync.fid, msg.sync.completion_pid, msg.sync.completion_reg, msg.sync.error))
         {
             return FAILED;
         }
@@ -1417,7 +1424,11 @@ Result Processor::Network::DorLink()
     {
         Family& family = m_familyTable[msg.done.fid];
 
-        COMMIT { family.broken |= msg.done.broken; }
+        COMMIT
+	{
+	    family.broken |= msg.done.broken;
+	    family.error |= msg.done.error;
+	}
 
         if (!m_allocator.DecreaseFamilyDependency(msg.done.fid, FAMDEP_PREV_SYNCHRONIZED))
         {
@@ -1427,7 +1438,7 @@ Result Processor::Network::DorLink()
         break;
     }
     case LinkMessage::MSG_SYNC:
-        if (!OnSync(msg.sync.fid, msg.sync.completion_pid, msg.sync.completion_reg))
+        if (!OnSync(msg.sync.fid, msg.sync.completion_pid, msg.sync.completion_reg, msg.sync.error))
         {
             return FAILED;
         }

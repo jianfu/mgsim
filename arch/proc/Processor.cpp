@@ -167,6 +167,7 @@ void Processor::Initialize(Processor* prev3, Processor* prev2, Processor* prev, 
     //FT-END
     m_registerFile.p_asyncW.AddProcess(m_network.p_DelegationIn);           // Remote register receives
     m_registerFile.p_asyncW.AddProcess(m_dcache.p_CompletedReads);          // Mem Load writebacks
+    m_registerFile.p_asyncW.AddProcess(m_dcache.p_Incoming);                // Initilal L0 with thread logical index during Fault Recovery
 
     m_registerFile.p_asyncW.AddProcess(m_fpu.p_Pipeline);                   // FPU Op writebacks
     m_registerFile.p_asyncW.AddProcess(m_allocator.p_FamilyCreate);         // Family creation

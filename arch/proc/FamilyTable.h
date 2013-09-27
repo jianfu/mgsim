@@ -103,6 +103,7 @@ struct Family
     bool	 ftmode;
     bool	 retry;
     uint8_t	 st_ctr;
+    bool	 error;
     //FT-END
 	
     // Admin

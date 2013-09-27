@@ -40,6 +40,9 @@ CompBuffer::CompBuffer(const std::string& name,
     m_compBuffer0.resize(1 << m_bufferindexbits);
     m_compBuffer1.resize(1 << m_bufferindexbits);
 
+    m_error0.resize(1 << m_bufferindexbits);
+    m_error1.resize(1 << m_bufferindexbits);
+
     m_incoming.Sensitive(p_Incoming);
     m_outgoing.Sensitive(p_Outgoing);
 }
@@ -132,25 +135,25 @@ bool CompBuffer::Read (MCID id, MemAddr address)
     //only read in redundancy scope need to be merged
     if ((id & 1) == 1) //DCache & ftmode
     {
-	for (request_buffer::const_iterator p = m_compBuffer[mtid].begin(); p != m_compBuffer[mtid].end(); ++p)
-	{
-	    if(p->address == address && p->redundant == redundant)
-	    {
-		line::blit(&mdata[0], p->data.data, p->data.mask, m_lineSize);
-		line::setif(&mask[0], true, p->data.mask, m_lineSize);
-		merge = true;
-	    }
-	}
+		for (request_buffer::const_iterator p = m_compBuffer[mtid].begin(); p != m_compBuffer[mtid].end(); ++p)
+		{
+			if(p->address == address && p->redundant == redundant)
+			{
+				line::blit(&mdata[0], p->data.data, p->data.mask, m_lineSize);
+				line::setif(&mask[0], true, p->data.mask, m_lineSize);
+				merge = true;
+			}
+		}
     
-	if (merge)
-	{
-	    if (!m_clients[real_mcid]->OnMemorySnooped(address, mdata, mask))
-	    {
-		DeadlockWrite("Unable to snoop update to cache clients, CB");
-		return FAILED;
-	    }
-	    merge = false;
-	}
+		if (merge)
+		{
+			if (!m_clients[real_mcid]->OnMemorySnooped(address, mdata, mask))
+			{
+				DeadlockWrite("Unable to snoop update to cache clients, CB");
+				return FAILED;
+			}
+			merge = false;
+		}
     }
     //Forward request to L2
     Request request;
@@ -178,12 +181,25 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
         return false;
     }
 
-    MCID            temp_client = 0;
-    WClientID       temp_wid = 0;
+    MCID            temp_client 	= 0;
+    WClientID       temp_wid 		= 0;
 
-    WClientID	    real_wid = wid >> 4;
-    uint8_t	    st_ctr = (wid >> 1) & 0x7;
-    bool	    retry = wid & 1;
+    WClientID	    real_wid 		= wid >> 4;
+    uint8_t	    	st_ctr 			= (wid >> 1) & 0x7;
+    bool	   		retry 			= wid & 1;
+
+    //FI-Begin
+    /*
+    char mdata[m_lineSize];
+    for(size_t i = 0; i < m_lineSize; i++)
+		mdata[i] = 0;
+
+    bool mask[m_lineSize];
+    for(size_t i = 0; i < m_lineSize; i++)
+		mask[i] = 0;
+    */
+    //FT-End
+
 
     DebugMemWrite("Write to cb%u: %#016llx, from %u, real_wid = %u, wid = %u", (unsigned)m_mcid, (unsigned long long)address, (unsigned)(id & 1), (unsigned)real_wid, (unsigned)wid);
 
@@ -201,105 +217,174 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
         line.address    = address;
         line.data       = data;
         line.redundant  = redundant;
-        line.client	= real_mcid;
+        line.client		= real_mcid;
         line.wid        = real_wid;
-	line.comp	= 0;
+		line.comp		= 0;
 
-	//It is a recovrable thread.
-	//All stores are buffered until they are all checked.
-	if (retry)
-	{
-	    if(m_compBuffer[mtid].empty())
-	    {
-		COMMIT{ m_compBuffer[mtid].push_back(line); }
-		DebugMemWrite("Write to buffer of cb%u: %#016llx, empty. This is a recoverable thread.", (unsigned)m_mcid, (unsigned long long)address);
-		return true;
-	    }
-	    else
-	    {
-		uint8_t count = 0;
-		bool flag = 0;
-
-		for (request_buffer::iterator p = m_compBuffer[mtid].begin(); p != m_compBuffer[mtid].end(); ++p)
+		//It is a recovrable thread.
+		//All stores are buffered until they are all checked.
+		if (retry)
 		{
-		    COMMIT {count ++;}
-
-		    //current write and p come from different thread, and p is not compared.
-		    if(p->redundant != redundant && !p->comp)
-		    {	//compare
-			if(p->address == address) //compare address
+			if(m_compBuffer[mtid].empty())
 			{
-			    for(size_t i = 0; i < m_lineSize; i++)  //Compare mask first
-			    {
-				if(line.data.mask[i] != p->data.mask[i])
-				{
-				    throw exceptf<SimulationException>(*this, "cb%u: %#016llx, Comparison failed because of mask!", (unsigned)m_mcid, (unsigned long long)address);
-				    //return false;  //Error.  Mask are not same.
-				}
-			    }
-
-			    //Mask are same.
-			    for(size_t i = 0; i < m_lineSize; i++)
-			    {
-				if(line.data.mask[i]) //Only compare the valid data.
-				{
-				    if (line.data.data[i] != p->data.data[i]) //An error is detected.
-				    {
-					throw exceptf<SimulationException>(*this, "cb%u: %#016llx, Comparison failed because of data!", (unsigned)m_mcid, (unsigned long long)address);
-					//return false; //Error. Data are not same.
-					//We need to flush L1 and CB...
-				    }
-				}
-			    }
-
-			    //Comparison success!
-			    COMMIT{
-				p->comp	    = 1;
-				p->client1  = line.client;
-				p->wid1	    = line.wid;
-				flag	    = 1;
-			    }
-
-			    break;
+				COMMIT{ m_compBuffer[mtid].push_back(line); }
+				DebugMemWrite("Write to buffer of cb%u: %#016llx, empty. This is a recoverable thread.", (unsigned)m_mcid, (unsigned long long)address);
+				return true;
 			}
 			else
 			{
-			    //Address are not same.
-			    throw exceptf<SimulationException>(*this, "cb%u: %#016llx, Comparison failed because of address!", (unsigned)m_mcid, (unsigned long long)address);
+				uint8_t count = 0;
+				bool flag = 0;
+
+				for (request_buffer::iterator p = m_compBuffer[mtid].begin(); p != m_compBuffer[mtid].end(); ++p)
+				{
+					COMMIT {count ++;}
+
+					//current write and p come from different thread, and p is not compared.
+					if(p->redundant != redundant && !p->comp)
+					{	//compare
+
+						//FI-Begin
+						//if(count == 1 && m_mcid == 1 && coming_from_right == redundant)
+						//  COMMIT{address ++;}
+						//FI-End
+
+						if(p->address == address) //compare address
+						{
+							//FI-Begin
+							//if(count == 3 && m_mcid == 1 && coming_from_right == redundant)
+							//	std::copy(mask, mask+ m_lineSize, line.data.mask);
+							//FI-End
+
+							for(size_t i = 0; i < m_lineSize; i++)  //Compare mask first
+							{
+								if(line.data.mask[i] != p->data.mask[i])
+								{
+									COMMIT
+									{
+										printf("%08lld: A recoverable mask error is detected in cb%u: %#016llx, (%d/%d)\n", (unsigned long long)GetCycleNo(), (unsigned)m_mcid, (unsigned long long)address, (unsigned)count, (unsigned)st_ctr);
+
+										if (coming_from_right == redundant)
+											m_error0[mtid] = 1;
+										else
+											m_error1[mtid] = 1;
+									}
+									break;
+								}
+							}
+
+						//FI-Begin
+						//if(count == 2 && m_mcid == 1 && coming_from_right == redundant)
+						//	std::copy(mdata, mdata + m_lineSize, line.data.data);
+						//FI-End
+
+						//Mask are same.
+						for(size_t i = 0; i < m_lineSize; i++)
+						{
+							if(line.data.mask[i]) //Only compare the valid data.
+							{
+								if (line.data.data[i] != p->data.data[i]) //An error is detected.
+								{
+									COMMIT
+									{
+										printf("%08lld: A recoverable data error is detected in cb%u: %#016llx, (%d/%d)\n", (unsigned long long)GetCycleNo(), (unsigned)m_mcid, (unsigned long long)address, (unsigned)count, (unsigned)st_ctr);
+
+										if (coming_from_right == redundant)
+											m_error0[mtid] = 1;
+										else
+											m_error1[mtid] = 1;
+									}
+									break;
+								}
+							}
+						}
+						}
+						else
+						{
+							COMMIT
+							{
+								printf("%08lld: A recoverable address error is detected in cb%u: %#016llx, (%d/%d)\n", (unsigned long long)GetCycleNo(), (unsigned)m_mcid, (unsigned long long)address, (unsigned)count, (unsigned)st_ctr);
+	
+								if (coming_from_right == redundant)
+									m_error0[mtid] = 1;
+								else
+									m_error1[mtid] = 1;
+
+							}
+						}
+
+						//Comparison finished!
+						COMMIT
+						{
+							p->comp	    = 1;
+							p->client1	= line.client;
+							p->wid1	    = line.wid;
+							flag	    = 1;
+						}
+						break;
+					}
+				}
+
+				if (!flag) //There is no comparison after traversing the buffer.
+				{
+					COMMIT{ m_compBuffer[mtid].push_back(line); }
+				}
+				else if (count == st_ctr) //the last store is just compared.
+				{
+					bool error = 0;
+
+					if (coming_from_right == redundant)
+						error = m_error0[mtid];
+					else
+						error = m_error1[mtid];
+
+					if (error)
+					{
+						DebugMemWrite("Error recovery is sent from cb%u due to (%#016llx)", (unsigned)m_mcid, (unsigned long long)address);
+
+						const Line& templine = m_compBuffer[mtid].front();
+
+						if(!Recover(templine.client, templine.wid, templine.client1, templine.wid1, 1))
+						{
+							DeadlockWrite("Unable to send recover info for client %u and client %u, flag = 1", (unsigned)templine.client, (unsigned)templine.client1);
+							return false;
+						}
+
+						while(!m_compBuffer[mtid].empty())
+							COMMIT{ m_compBuffer[mtid].pop_front(); }
+
+						if (coming_from_right == redundant)
+							m_error0[mtid] = 0;
+						else
+							m_error1[mtid] = 0;
+
+						return true;
+					}
+
+					for (size_t i = 0; i < count; i++)
+					{
+						const Line& templine = m_compBuffer[mtid].front();
+
+						Request request;
+						request.write     = true;
+						request.address   = templine.address;
+						request.data      = templine.data;
+						request.wid       = (templine.wid1 << 24) | (templine.client1 << 16) | (templine.wid << 8) | templine.client;     //wid contains the client index for l1 in CB (id)
+
+						if (!m_outgoing.Push(request))
+						{
+							DeadlockWrite("Unable to push request to outgoing buffer, CB.");
+							return false;
+						}
+
+						COMMIT{ m_compBuffer[mtid].pop_front(); }
+					}
+				}
 			}
-		    }
+			return true;
 		}
 
-		if (!flag) //There is no comparison after traversing the buffer.
-		{
-		    COMMIT{ m_compBuffer[mtid].push_back(line); }
-		}
-		else if (count == st_ctr) //the last store is just compared.
-		{
-		    for (size_t i = 0; i < count; i++)
-		    {
-			const Line& templine = m_compBuffer[mtid].front();
-
-			Request request;
-			request.write     = true;
-			request.address   = templine.address;
-			request.data      = templine.data;
-			request.wid       = (templine.wid1 << 24) | (templine.client1 << 16) | (templine.wid << 8) | templine.client;     //wid contains the client index for l1 in CB (id)
-
-			if (!m_outgoing.Push(request))
-			{
-			    DeadlockWrite("Unable to push request to outgoing buffer, CB.");
-			    return false;
-			}
-
-			COMMIT{ m_compBuffer[mtid].pop_front(); }
-		    }
-		}
-	    }
-	    return true;
-	}
-
-	//It is a non-recovrable thread.
+		//It is a non-recovrable thread.
         //printf ("addr=0x%016llx, mcid=%u\n", (unsigned long long)address, (unsigned)id);
         DebugMemWrite("Write to cb%u: %#016llx", (unsigned)m_mcid, (unsigned long long)address);
 
@@ -326,54 +411,94 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
             {
                 if(templine.address == address) //same address
                 {
+					//FI-Begin
+					//if(m_mcid == 1 && coming_from_right == redundant)
+					//	std::copy(mask, mask+ m_lineSize, line.data.mask);
+					//FI-End
+
                     for(size_t i = 0; i < m_lineSize; i++)  //Compare mask first
                     {
                         if(line.data.mask[i] != templine.data.mask[i])
                         {
-                            throw exceptf<SimulationException>(*this, "cb%u: %#016llx, Comparison failed because of mask!", (unsigned)m_mcid, (unsigned long long)address);
-							//return false;  //Error.  Mask are not same.
-                        }
-                    }
-                    //mask are same.
+                            COMMIT
+							{
+								printf("%08lld: A un-recoverable mask error is detected in cb%u: %#016llx\n", (unsigned long long)GetCycleNo(), (unsigned)m_mcid, (unsigned long long)address);
+
+								if(!Recover(templine.client, templine.wid, line.client, line.wid, 0))
+								{
+									DeadlockWrite("Unable to send recover info for client %u and client %u, flag = 0", (unsigned)templine.client, (unsigned)line.client);
+									return false;
+								}
+							}
+							break;
+						}
+					}
+
+					//FI-Begin
+					//if(m_mcid == 1 && coming_from_right == redundant)
+					//	std::copy(mdata, mdata + m_lineSize, line.data.data);
+					//FI-End
+
+					//mask are same.
                     for(size_t i = 0; i < m_lineSize; i++)
                     {
-                        if(line.data.mask[i]) //Only compare the valid data.
+						if(line.data.mask[i]) //Only compare the valid data.
                         {
-                            if (line.data.data[i] != templine.data.data[i]) //An error is detected.
+							if (line.data.data[i] != templine.data.data[i]) //An error is detected.
                             {
-                                throw exceptf<SimulationException>(*this, "cb%u: %#016llx, Comparison failed because of data!", (unsigned)m_mcid, (unsigned long long)address);
-								//return false; //Error
-                                //We need to flush L1 and CB...
-                            }
-                        }
+								COMMIT
+								{
+									printf("%08lld: A un-recoverable data error is detected in cb%u: %#016llx\n", (unsigned long long)GetCycleNo(), (unsigned)m_mcid, (unsigned long long)address);
+
+									if(!Recover(templine.client, templine.wid, line.client, line.wid, 0))
+									{
+										DeadlockWrite("Unable to send recover info for client %u and client %u, flag = 0", (unsigned)templine.client, (unsigned)line.client);
+										return false;
+									}
+								}
+								break;
+							}
+						}
                     }
+
                     temp_client     = templine.client;
                     temp_wid        = templine.wid;
 				
                     DebugMemWrite("Write to m_outgoing from cb%u: %#016llx, Comparison success!", (unsigned)m_mcid, (unsigned long long)address);
                 }
-                else
-                    throw exceptf<SimulationException>(*this, "cb%u: %#016llx, Comparison failed because of address!", (unsigned)m_mcid, (unsigned long long)address);
+				else
+				{
+                    COMMIT
+					{
+						printf("%08lld: A un-recoverable address error is detected in cb%u: %#016llx\n", (unsigned long long)GetCycleNo(), (unsigned)m_mcid, (unsigned long long)address);
 
-                COMMIT{ m_compBuffer[mtid].pop_front(); }
+						if(!Recover(templine.client, templine.wid, line.client, line.wid, 0))
+						{
+							DeadlockWrite("Unable to send recover info for client %u and client %u, flag = 0", (unsigned)templine.client, (unsigned)line.client);
+							return false;
+						}
+					}
+				}
+
+				COMMIT{ m_compBuffer[mtid].pop_front(); }
             }
         }
     }
-    else
+	else
     {
-	//This is a unprotected write (i.e. out of redundancy scope)
-	//Snoop back to other clients of CB
-	for (size_t i = 0; i < m_clients.size(); ++i)
-	{
-	    if (m_clients[i] != NULL && i != real_mcid)
-	    {
-		if (!m_clients[i]->OnMemorySnooped(address, data.data, data.mask))
+		//This is a unprotected write (i.e. out of redundancy scope)
+		//Snoop back to other clients of CB
+		for (size_t i = 0; i < m_clients.size(); ++i)
 		{
-		    DeadlockWrite("Unable to snoop update to cache clients, unprotected write in CB");
-		    return FAILED;
-		}
-	    }
-	}	
+			if (m_clients[i] != NULL && i != real_mcid)
+			{
+				if (!m_clients[i]->OnMemorySnooped(address, data.data, data.mask))
+				{
+					DeadlockWrite("Unable to snoop update to cache clients, unprotected write in CB");
+					return FAILED;
+				}
+			}
+		}	
     }
     
     //They are same, push to m_outgoing and forward it to L2 later.
@@ -397,6 +522,31 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
     return true;
 }
 
+bool CompBuffer::Recover(MCID client0, WClientID wid0, MCID client1, WClientID wid1, bool flag)
+{
+    WClientID temp_wid0 = 0;
+    WClientID temp_wid1 = 0;
+
+    if(flag) //It is called by a recoverable thread.
+    {
+	temp_wid0 = wid0 | (1<<8);
+	temp_wid1 = wid1 | (1<<8);
+    }
+    else //called by a non-recoverable thread.
+    {
+	assert(flag == 0);
+	temp_wid0 = wid0 | (1<<9);
+	temp_wid1 = wid1 | (1<<9);
+    }
+
+    if (!m_clients[client0]->OnMemoryWriteCompleted(temp_wid0) || !m_clients[client1]->OnMemoryWriteCompleted(temp_wid1))
+    {
+	DeadlockWrite("Unable to process write completion (Recover) for client %u and client %u, CB", (unsigned)client0, (unsigned)client1);
+	return false;
+    }
+
+    return true;
+}
 
 bool CompBuffer::OnMemoryReadCompleted(MemAddr addr, const char* data, MCID client)
 {
@@ -587,6 +737,15 @@ Result CompBuffer::DoIncoming()
 void CompBuffer::Cmd_Read(std::ostream& out, const std::vector<std::string>& arguments) const
 {
     const std::vector<request_buffer>* compBuffer = NULL;
+
+    if (arguments[0] == "error")
+    {
+	for (int j = 0; j < 8; j++)
+	    COMMIT{printf ("L%d: %d\n", j, m_error0[j]);}
+	for (int j = 0; j < 8; j++)
+	    COMMIT{printf ("R%d: %d\n", j, m_error1[j]);}
+	return;
+    }
 
     if (arguments[0] == "left")
         compBuffer = &m_compBuffer0;

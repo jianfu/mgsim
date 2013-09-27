@@ -53,20 +53,23 @@ namespace Simulator
             MCID            client1;
         };
 
-        MCID                                                            m_mcid;
-        size_t                                                          m_lineSize;         //Size of cacheline
-        size_t                                                  m_bufferindexbits;  // bits necessary to hold a set number
+        MCID                            m_mcid;
+        size_t                          m_lineSize;         //Size of cacheline
+        size_t                          m_bufferindexbits;  // bits necessary to hold a set number
 
         StorageTraceSet                 m_storages;
         typedef std::deque<Line>        request_buffer;
         std::vector<request_buffer>     m_compBuffer0;
         std::vector<request_buffer>     m_compBuffer1;
+	std::vector<bool>		m_error0;
+	std::vector<bool>		m_error1;
+
 
         std::vector<IMemoryCallback*>   m_clients;              //ICache, DCache, DCA
         IMemory&                        m_memory;      //L2
 
         bool                            m_firstregistered;
-        bool                                            m_firstregistered_dcache;
+        bool                            m_firstregistered_dcache;
 
         Buffer<Response>                m_incoming;        ///< Incoming buffer from memory bus.
         Buffer<Request>                 m_outgoing;        ///< Outgoing buffer to memory bus.
@@ -87,6 +90,8 @@ namespace Simulator
         bool Read (MCID id, MemAddr address);
         bool Write(MCID id, MemAddr address, const MemData& data, WClientID wid);
 
+	//Send recover infomation (tid) to L1D via OnMemoryWriteCompleted channel.
+	bool Recover(MCID client0, WClientID wid0, MCID client1, WClientID wid1, bool flag);
 
         //Forward to L1, From L2
         //Just forwarding, NOP

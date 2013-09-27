@@ -195,8 +195,8 @@ void Processor::FamilyTable::Cmd_Read(ostream& out, const vector<string>& argume
     }
     else
     {
-        out << "    |     Initial PC     | Allocated | Threads | P/A/D/Rd |  Cores  | Link | nLink |    Sync    |     Capability     | State         |   Symbol  | redundant | rthreadCount | corr_fid | ftmode | retry | st_ctr" << endl; // [FT] 
-        out << "----+--------------------+-----------+---------+----------+---------+------+-------+------------+--------------------+---------------+-----------+-----------+--------------+----------+--------+-------+-------" << endl;
+        out << "    |     Initial PC     | Allocated | Threads | P/A/D/Rd |  Cores  | Link | nLink |    Sync    |     Capability     | State         |   Symbol  | redundant | rthreadCount | corr_fid | ftmode | retry | st_ctr | error" << endl; // [FT] 
+        out << "----+--------------------+-----------+---------+----------+---------+------+-------+------------+--------------------+---------------+-----------+-----------+--------------+----------+--------+-------+--------+------" << endl;
 
         for (set<LFID>::const_iterator p = fids.begin(); p != fids.end(); ++p)
         {
@@ -205,7 +205,7 @@ void Processor::FamilyTable::Cmd_Read(ostream& out, const vector<string>& argume
             out << dec << right << setw(3) << setfill(' ') << *p << " | ";
             if (family.state == FST_EMPTY)
             {
-                out << "                   |           |         |          |         |      |      |            |                    |               |           |           |              |          |       |       |"; // [FT]
+                out << "                   |           |         |          |         |      |      |            |                    |               |           |           |              |          |       |       |      "; // [FT]
             }
             else
             {
@@ -282,7 +282,8 @@ void Processor::FamilyTable::Cmd_Read(ostream& out, const vector<string>& argume
                     << " | " << left << setw(10) << setfill(' ') << dec << (int)family.corr_fid
                     << " | " << left << setw(8) << setfill(' ') << family.ftmode
 		    << " | " << left << setw(8) << setfill(' ') << family.retry
-		    << " | " << left << setw(8) << setfill(' ') << dec << (int)family.st_ctr;
+		    << " | " << left << setw(8) << setfill(' ') << dec << (int)family.st_ctr
+			<< " | " << left << setw(8) << setfill(' ') << dec << (int)family.error;
                 //FT-END
             }
             out << endl;
