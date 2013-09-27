@@ -46,7 +46,7 @@ public:
         Bundle         binfo;          ///< The bundle information for bundled requests.
         //FT-BEGIN
         bool           redundant;
-	bool	       ftmode;
+		bool	       ftmode;
         //FT-END
     };
 
@@ -74,8 +74,8 @@ public:
 	
     struct RmtwrInfo
     {
-	TID	tid;
-	FID     fid;
+		TID		tid;
+		FID     fid;
     };
 
     enum BundleState

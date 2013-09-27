@@ -24,7 +24,7 @@ struct RemoteMessage
         MSG_RTHREADCOUNT,   ///< The distance of thread creation between master family and redundant family 
         MSG_MASTERTID,      ///< The physic matching master tid for redundant thread
         MSG_PAIR,           ///< Paring the master and redundant family
-	MSG_RTHREADDONE,
+		MSG_RTHREADDONE,
         //FT-END
     };
 
@@ -41,8 +41,8 @@ struct RemoteMessage
             bool           suspend;       ///< Queue request if no context available?
             bool           exclusive;     ///< Allocate the exclusive context?
             //FT-BEGIN
-            bool           redundant; 
-	    bool	   ftmode;
+			bool           redundant; 
+			bool	   ftmode;
             //FT-END
             Bundle         bundle;        ///< Bundle information (if bundled)
         } allocate;
@@ -176,7 +176,7 @@ struct LinkMessage
             RegIndex completion_reg; ///< Reg on parent_pid of the completion register
             bool     exact;          ///< Allocate exactly 'size' cores
             bool     suspend;        ///< Suspend until we get a context (only if exact)
-	    bool     ftmode;
+			bool     ftmode;
         } allocate;
 
         struct
@@ -202,8 +202,8 @@ struct LinkMessage
             PSize    numCores;
             MemAddr  address;
             RegsNo   regs[NUM_REG_TYPES];
-	    bool     retry;
-	    uint8_t  st_ctr;
+			bool     retry;
+			uint8_t  st_ctr;
         } create;
 
         struct
@@ -218,7 +218,7 @@ struct LinkMessage
             LFID     fid;
             PID      completion_pid;
             RegIndex completion_reg;
-	    bool     error;
+			bool     error;
         } sync;
 
         struct
@@ -378,7 +378,7 @@ public:
         PID      pid;
         RegIndex reg;
         bool     broken;
-	bool	 error;
+		bool	 error;
     };
 
     Network(const std::string& name, Processor& parent, Clock& clock, const std::vector<Processor*>& grid, Allocator& allocator, RegisterFile& regFile, FamilyTable& familyTable, Config& config);

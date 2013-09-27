@@ -100,10 +100,10 @@ struct Family
     bool         redundant;
     LFID         corr_fid;
     TSize        rthreadCount;   //The distance of thread creation between master family and redundant family
-    bool	 ftmode;
-    bool	 retry;
-    uint8_t	 st_ctr;
-    bool	 error;
+    bool		 ftmode;
+    bool	 	 retry;
+    uint8_t	 	 st_ctr;
+    bool	 	 error;
     //FT-END
 	
     // Admin
@@ -118,10 +118,10 @@ public:
     FSize GetNumFamilies() const { return m_families.size(); }
 
     typedef Family value_type;
-          Family& operator[](LFID fid)       { return m_families[fid]; }
-        const Family& operator[](LFID fid) const { return m_families[fid]; }
+    Family& operator[](LFID fid)       { return m_families[fid]; }
+    const Family& operator[](LFID fid) const { return m_families[fid]; }
 
-        LFID  AllocateFamily(ContextType type);
+    LFID  AllocateFamily(ContextType type);
     void  FreeFamily(LFID fid, ContextType context);
 
     FSize GetNumFreeFamilies(ContextType type) const;

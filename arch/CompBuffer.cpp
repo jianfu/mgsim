@@ -529,20 +529,20 @@ bool CompBuffer::Recover(MCID client0, WClientID wid0, MCID client1, WClientID w
 
     if(flag) //It is called by a recoverable thread.
     {
-	temp_wid0 = wid0 | (1<<8);
-	temp_wid1 = wid1 | (1<<8);
+		temp_wid0 = wid0 | (1<<8);
+		temp_wid1 = wid1 | (1<<8);
     }
     else //called by a non-recoverable thread.
     {
-	assert(flag == 0);
-	temp_wid0 = wid0 | (1<<9);
-	temp_wid1 = wid1 | (1<<9);
+		assert(flag == 0);
+		temp_wid0 = wid0 | (1<<9);
+		temp_wid1 = wid1 | (1<<9);
     }
 
     if (!m_clients[client0]->OnMemoryWriteCompleted(temp_wid0) || !m_clients[client1]->OnMemoryWriteCompleted(temp_wid1))
     {
-	DeadlockWrite("Unable to process write completion (Recover) for client %u and client %u, CB", (unsigned)client0, (unsigned)client1);
-	return false;
+		DeadlockWrite("Unable to process write completion (Recover) for client %u and client %u, CB", (unsigned)client0, (unsigned)client1);
+		return false;
     }
 
     return true;
@@ -558,11 +558,11 @@ bool CompBuffer::OnMemoryReadCompleted(MemAddr addr, const char* data, MCID clie
     // merge with outgoing buffer.
     for (Buffer<Request>::const_iterator p = m_outgoing.begin(); p != m_outgoing.end(); ++p)
     {
-	if (p->write && p->address == addr)
-	{
-	    // This is a write to the same line, merge it
-	    line::blit(&mdata[0], p->data.data, p->data.mask, m_lineSize);
-	}
+		if (p->write && p->address == addr)
+		{
+			// This is a write to the same line, merge it
+			line::blit(&mdata[0], p->data.data, p->data.mask, m_lineSize);
+		}
     }
 	
     Response response;
@@ -666,11 +666,11 @@ Result CompBuffer::DoIncoming()
     {
     case READ:
     {
-	if (!m_clients[response.client0]->OnMemoryReadCompleted(response.address, response.data.data, response.client0))
-	{
-	    DeadlockWrite("Unable to send read completion to client %u from cb%u", (unsigned)response.client0, (unsigned)m_mcid);
-	    return FAILED;
-	}
+		if (!m_clients[response.client0]->OnMemoryReadCompleted(response.address, response.data.data, response.client0))
+		{
+			DeadlockWrite("Unable to send read completion to client %u from cb%u", (unsigned)response.client0, (unsigned)m_mcid);
+			return FAILED;
+		}
         break;
     }
 

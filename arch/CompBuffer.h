@@ -61,8 +61,8 @@ namespace Simulator
         typedef std::deque<Line>        request_buffer;
         std::vector<request_buffer>     m_compBuffer0;
         std::vector<request_buffer>     m_compBuffer1;
-	std::vector<bool>		m_error0;
-	std::vector<bool>		m_error1;
+		std::vector<bool>				m_error0;
+		std::vector<bool>				m_error1;
 
 
         std::vector<IMemoryCallback*>   m_clients;              //ICache, DCache, DCA
@@ -90,8 +90,8 @@ namespace Simulator
         bool Read (MCID id, MemAddr address);
         bool Write(MCID id, MemAddr address, const MemData& data, WClientID wid);
 
-	//Send recover infomation (tid) to L1D via OnMemoryWriteCompleted channel.
-	bool Recover(MCID client0, WClientID wid0, MCID client1, WClientID wid1, bool flag);
+		//Send recover infomation (tid) to L1D via OnMemoryWriteCompleted channel.
+		bool Recover(MCID client0, WClientID wid0, MCID client1, WClientID wid1, bool flag);
 
         //Forward to L1, From L2
         //Just forwarding, NOP

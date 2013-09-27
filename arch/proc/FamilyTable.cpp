@@ -281,9 +281,9 @@ void Processor::FamilyTable::Cmd_Read(ostream& out, const vector<string>& argume
                     << " | " << left << setw(12) << setfill(' ') << family.rthreadCount
                     << " | " << left << setw(10) << setfill(' ') << dec << (int)family.corr_fid
                     << " | " << left << setw(8) << setfill(' ') << family.ftmode
-		    << " | " << left << setw(8) << setfill(' ') << family.retry
-		    << " | " << left << setw(8) << setfill(' ') << dec << (int)family.st_ctr
-			<< " | " << left << setw(8) << setfill(' ') << dec << (int)family.error;
+					<< " | " << left << setw(8) << setfill(' ') << family.retry
+					<< " | " << left << setw(8) << setfill(' ') << dec << (int)family.st_ctr
+					<< " | " << left << setw(8) << setfill(' ') << dec << (int)family.error;
                 //FT-END
             }
             out << endl;

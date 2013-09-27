@@ -269,7 +269,7 @@ Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAdd
         if (i == size)
         {
             // Data is entirely in the cache, copy it
-	    COMMIT
+			COMMIT
             {
                 memcpy(data, line->data + offset, (size_t)size);
                 ++m_numRHits;
@@ -291,30 +291,30 @@ Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAdd
     }
     else // read hit for recovering thread
     {
-	assert (recover == 1);
-	assert (line->state != LINE_EMPTY);
+		assert (recover == 1);
+		assert (line->state != LINE_EMPTY);
 
-	COMMIT
-	{
-	    line->state		    = LINE_LOADING;
-	    line->processing	    = false;
-	    std::fill(line->valid, line->valid+m_lineSize, false);
+		COMMIT
+		{
+			line->state		    = LINE_LOADING;
+			line->processing	    = false;
+			std::fill(line->valid, line->valid+m_lineSize, false);
 
-	    if (reg != NULL && reg->valid())
-	    {
-		// We're loading to a valid register, queue it
-		RegAddr old   = line->waiting;
-		line->waiting = *reg;
-		*reg = old;
-	    }
-	    else
-	    {
-		line->create  = true;
-	    }
-	}
+			if (reg != NULL && reg->valid())
+			{
+				// We're loading to a valid register, queue it
+				RegAddr old   = line->waiting;
+				line->waiting = *reg;
+				*reg = old;
+			}
+			else
+			{
+				line->create  = true;
+			}
+		}
 
-	//Send read request to memory as read miss in DCache
-	Request request;
+		//Send read request to memory as read miss in DCache
+		Request request;
         request.write     = false;
         request.address   = address - offset;
         request.wid       = tid;
@@ -326,7 +326,7 @@ Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAdd
             return FAILED;
         }
 
-	return DELAYED;
+		return DELAYED;
     }
 
     // Data is being loaded, add request to the queue
@@ -464,20 +464,20 @@ bool Processor::DCache::OnMemoryReadCompleted(MemAddr addr, const char* data, MC
     {
         assert(line->state == LINE_LOADING || line->state == LINE_INVALID);
 
-	for (Buffer<Request>::const_iterator p = m_outgoing.begin(); p != m_outgoing.end(); ++p)
-	{
-	    if ((!p->write) && p->address == addr)  //read still in outgoing buffer, ignore it
-		return true;
-	}
+		for (Buffer<Request>::const_iterator p = m_outgoing.begin(); p != m_outgoing.end(); ++p)
+		{
+			if ((!p->write) && p->address == addr)  //read still in outgoing buffer, ignore it
+				return true;
+		}
         // Registers are waiting on this data
         COMMIT
         {
             /*
-                      Merge with pending writes because the incoming line
-                      will not know about those yet and we don't want inconsistent
-                      content in L1.
-                      This is kind of a hack; it's feasibility in hardware in a single cycle
-		      is questionable.
+			Merge with pending writes because the incoming line
+            will not know about those yet and we don't want inconsistent
+            content in L1.
+            This is kind of a hack; it's feasibility in hardware in a single cycle
+		    is questionable.
             */
             char mdata[m_lineSize];
 
@@ -485,7 +485,7 @@ bool Processor::DCache::OnMemoryReadCompleted(MemAddr addr, const char* data, MC
 
             for (Buffer<Request>::const_iterator p = m_outgoing.begin(); p != m_outgoing.end(); ++p)
             {
-		if (p->write && p->address == addr)
+				if (p->write && p->address == addr)
                 {
                     // This is a write to the same line, merge it
                     line::blit(&mdata[0], p->data.data, p->data.mask, m_lineSize);
@@ -741,39 +741,39 @@ Result Processor::DCache::DoIncomingResponses()
     const Response& response = m_incoming.Front();
     if (response.write)
     {
-	WClientID temp_wid  = 0;
-	WClientID flag	    = 0;
+		WClientID temp_wid  = 0;
+		WClientID flag	    = 0;
 
-	flag	    = response.wid >> 8;
-	temp_wid    = response.wid & 0xff;
+		flag	    = response.wid >> 8;
+		temp_wid    = response.wid & 0xff;
 
-	if (flag == 1) //recoverable thread
-	{
-	    if (!m_allocator.ReExecThread(temp_wid))
+		if (flag == 1) //recoverable thread
+		{
+			if (!m_allocator.ReExecThread(temp_wid))
             {
                 DeadlockWrite("Unable to re-execute thread %u", (unsigned)temp_wid);
                 return FAILED;
             }
-	}
-	else if (flag == 2) //non-recoverable thread
-	{
-	    Thread& thread = m_threadTable[temp_wid];
-	    Family& family = m_familyTable[thread.family];
+		}
+		else if (flag == 2) //non-recoverable thread
+		{
+			Thread& thread = m_threadTable[temp_wid];
+			Family& family = m_familyTable[thread.family];
 
-	    family.error = 1;
+			family.error = 1;
 
-	    //FIX ME: this thread and family should be terminated as soon as possible
-	}
-	else if (flag == 0) //noraml write completion
-	{
-	    if (!m_allocator.DecreaseThreadDependency((TID)response.wid, THREADDEP_OUTSTANDING_WRITES))
-	    {
-		DeadlockWrite("Unable to decrease outstanding writes on T%u", (unsigned)response.wid);
-		return FAILED;
-	    }
+			//FIX ME: this thread and family should be terminated as soon as possible
+		}
+		else if (flag == 0) //noraml write completion
+		{
+			if (!m_allocator.DecreaseThreadDependency((TID)response.wid, THREADDEP_OUTSTANDING_WRITES))
+			{
+				DeadlockWrite("Unable to decrease outstanding writes on T%u", (unsigned)response.wid);
+				return FAILED;
+			}
 
-	    DebugMemWrite("T%u completed store", (unsigned)response.wid);
-	}
+			DebugMemWrite("T%u completed store", (unsigned)response.wid);
+		}	
     }
     else
     {
@@ -805,7 +805,7 @@ Result Processor::DCache::DoOutgoingRequests()
     WClientID wid = (request.wid << 4) | (family.st_ctr << 1) | thread.retry;
     //if it is out of FT scope, tag this write as non-dcache, write pass through cb
     if(!family.ftmode && (mcid & 1))
-	mcid = mcid - 1;
+		mcid = mcid - 1;
     //FT-END
 	
     if (request.write)
@@ -821,7 +821,7 @@ Result Processor::DCache::DoOutgoingRequests()
     }
     else
     {
-	if (!m_memory.Read(mcid, request.address))
+		if (!m_memory.Read(mcid, request.address))
         {
             DeadlockWrite("Unable to send read to 0x%016llx to memory", (unsigned long long)request.address);
             return FAILED;

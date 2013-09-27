@@ -23,10 +23,10 @@ Processor::Pipeline::PipeAction Processor::Pipeline::MemoryStage::OnCycle()
         // It's a new memory operation!
         assert(m_input.size <= sizeof(uint64_t));
 
-	//FT-begin
-	Thread& thread = m_threadTable[m_input.tid];
-	Family& family = m_familyTable[thread.family];
-	//FT-end
+		//FT-begin
+		Thread& thread = m_threadTable[m_input.tid];
+		Family& family = m_familyTable[thread.family];
+		//FT-end
 
         Result result = SUCCESS;
         if (rcv.m_state == RST_FULL)
@@ -55,12 +55,12 @@ Processor::Pipeline::PipeAction Processor::Pipeline::MemoryStage::OnCycle()
                 {
                     result = mmio.Write(m_input.address, data, m_input.size, m_input.fid, m_input.tid);
                     
-		    //FT-begin
-		    COMMIT{
-			if (family.ftmode)
-			    thread.store_ctr++;
-		    }
-		    //FT-end
+					//FT-begin
+					COMMIT{
+						if (family.ftmode)
+							thread.store_ctr++;
+					}
+					//FT-end
 
                     if (result == FAILED)
                     {
@@ -75,7 +75,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::MemoryStage::OnCycle()
                 }
                 else
                 {
-		    // Normal request to memory
+					// Normal request to memory
                     if ((result = m_dcache.Write(m_input.address, data, m_input.size, m_input.fid, m_input.tid)) == FAILED)
                     {
                         // Stall

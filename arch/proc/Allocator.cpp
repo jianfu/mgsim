@@ -331,8 +331,8 @@ bool Processor::Allocator::AllocateThread(LFID fid, TID tid, bool isNewlyAllocat
     thread->regIndex         = INVALID_REG_INDEX;
     thread->cleanupFlag      = 0;
     thread->store_ctr        = 1024;
-    thread->retry	     = family->retry;
-    thread->recover	     = 0;
+    thread->retry	    	 = family->retry;
+    thread->recover	     	 = 0;
     //FT-END
 
     // Initialize dependencies
@@ -376,13 +376,13 @@ bool Processor::Allocator::AllocateThread(LFID fid, TID tid, bool isNewlyAllocat
     {
         // Reserve the memory (commits on use)
         //redundant thread will not reserve TLS
-	//mater thread and thread which is not in FT mode can reserve TLS 
-	if (family->redundant == 0) 
-	{
-	    const MemAddr tls_base = m_parent.GetTLSAddress(fid, tid);
-	    const MemSize tls_size = m_parent.GetTLSSize();
-	    m_parent.MapMemory(tls_base+tls_size/2, tls_size/2);
-	}
+		//mater thread and thread which is not in FT mode can reserve TLS 
+		if (family->redundant == 0) 
+		{
+			const MemAddr tls_base = m_parent.GetTLSAddress(fid, tid);
+			const MemSize tls_size = m_parent.GetTLSSize();
+			m_parent.MapMemory(tls_base+tls_size/2, tls_size/2);
+		}
     }
 
     SInteger logical_index = family->start;
@@ -537,7 +537,7 @@ bool Processor::Allocator::DecreaseFamilyDependency(LFID fid, Family& family, Fa
                 msg.type        = LinkMessage::MSG_DONE;
                 msg.done.fid    = family.link;
                 msg.done.broken = family.broken;
-		msg.done.error	= family.error;
+				msg.done.error	= family.error;
                 //FT-BEGIN
                 msg.redundant   = family.redundant;
                 //FT-END
@@ -560,7 +560,7 @@ bool Processor::Allocator::DecreaseFamilyDependency(LFID fid, Family& family, Fa
                 info.pid = family.sync.pid;
                 info.reg = family.sync.reg;
                 info.broken = family.broken;
-		info.error  = family.error;
+				info.error  = family.error;
 
                 if (!m_network.SendSync(info))
                 {
@@ -729,15 +729,12 @@ bool Processor::Allocator::DecreaseThreadDependency(TID tid, ThreadDependency de
         {
             // Wake up the thread that was waiting on it
             ThreadQueue tq = {tid, tid};
-	    assert (tid != INVALID_TID);
+			assert (tid != INVALID_TID);
             if (!ActivateThreads(tq))
             {
                 return false;
             }
-            COMMIT
-	    {
-		thread.waitingForWrites = false;
-	    }
+            COMMIT{ thread.waitingForWrites = false; }
         }
 	else if (thread.state == TST_STORE)
 	{
@@ -751,7 +748,7 @@ bool Processor::Allocator::DecreaseThreadDependency(TID tid, ThreadDependency de
 
 	COMMIT{
 	    if (family.ftmode)
-		thread.store_ctr++;
+			thread.store_ctr++;
 	}
 
     case THREADDEP_PREV_CLEANED_UP:
@@ -759,39 +756,33 @@ bool Processor::Allocator::DecreaseThreadDependency(TID tid, ThreadDependency de
     case THREADDEP_R_THREAD_DONE:
         if (deps->numPendingWrites == 0 && deps->prevCleanedUp && deps->killed)
         {
-	    //FT mode, redundant thread is not terminated, so master thread can not 
-	    //be terminated.
-	    if (family.ftmode && !family.redundant && !deps->rThreadDone)
-		break;
-	    else
-	    {
-		//redundant thread should send a msg to master when it is terminated.
-		if (family.ftmode && family.redundant) 
-		{
-		    if (!m_rcleanup.Push(tid))
-		    {
-			DeadlockWrite("T%u unable to push tid into  m_rcleanup", (unsigned)tid);
-			return false;
-		    }
-		}
+			//FT mode, redundant thread is not terminated, so master thread can not 
+			//be terminated.
+			if (family.ftmode && !family.redundant && !deps->rThreadDone)
+				break;
+			else
+			{
+				//redundant thread should send a msg to master when it is terminated.
+				if (family.ftmode && family.redundant) 
+				{
+					if (!m_rcleanup.Push(tid))
+					{
+						DeadlockWrite("T%u unable to push tid into  m_rcleanup", (unsigned)tid);
+						return false;
+					}
+				}
 				
-		// This thread can be cleaned up, push it on the cleanup queue
-		if (!m_cleanup.Push(tid))
-		{
-		    return false;
-		}
-		//FT-BEGIN
-		else
-		{	
-		    COMMIT{
-		    thread.cleanupFlag = 0; 
-		    }
-		}
-		//FT-END
-			
-		break;
-
-	    }
+				// This thread can be cleaned up, push it on the cleanup queue
+				if (!m_cleanup.Push(tid))
+				{
+					return false;
+				}
+				else
+				{	
+					COMMIT{ thread.cleanupFlag = 0; }
+				}
+			break;
+			}
         }
     }
 
@@ -811,8 +802,8 @@ Result Processor::Allocator::DoRThreadNotify()
 
     if (!m_network.SendMessage(msg))
     {
-	DeadlockWrite("Unable to send R_THREAD_DONE message!");
-	return FAILED;
+		DeadlockWrite("Unable to send R_THREAD_DONE message!");
+		return FAILED;
     }
 	
     m_rcleanup.Pop();
@@ -828,7 +819,7 @@ bool Processor::Allocator::IncreaseThreadDependency(TID tid, ThreadDependency de
         {
         case THREADDEP_OUTSTANDING_WRITES: deps.numPendingWrites++; break;
         case THREADDEP_R_THREAD_DONE:
-	case THREADDEP_PREV_CLEANED_UP:
+		case THREADDEP_PREV_CLEANED_UP:
         case THREADDEP_TERMINATED:         assert(0); break;
         }
     }
@@ -891,10 +882,10 @@ FCapability Processor::Allocator::InitializeFamily(LFID fid) const
         family.redundant     = false;
         family.corr_fid      = INVALID_LFID;
         family.rthreadCount  = 0;
-	family.ftmode	     = 0;  
-	family.retry	     = 0;
-	family.st_ctr 	     = 0;
-	family.error	     = 0;
+		family.ftmode	     = 0;  
+		family.retry	     = 0;
+		family.st_ctr 	     = 0;
+		family.error	     = 0;
         //FT-END
 
         // Dependencies
@@ -1045,53 +1036,49 @@ Result Processor::Allocator::DoThreadAllocate()
         //FT-BEGIN
         if(!thread.cleanupFlag)
         {
-        //FT-END
+			// Clear the thread's dependents, if any
+			for (size_t i = 0; i < NUM_REG_TYPES; i++)
+			{
+				if (family.regs[i].count.shareds > 0)
+				{
+					if (!m_registerFile.Clear(MAKE_REGADDR((RegType)i, thread.regs[i].dependents), family.regs[i].count.shareds))
+					{
+						DeadlockWrite("F%u/T%u(%llu) unable to clear the dependent registers",
+								(unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
+					return FAILED;
+					}
+				}	
+			}
 
-        // Clear the thread's dependents, if any
-	    for (size_t i = 0; i < NUM_REG_TYPES; i++)
-	    {
-		if (family.regs[i].count.shareds > 0)
-		{
-		    if (!m_registerFile.Clear(MAKE_REGADDR((RegType)i, thread.regs[i].dependents), family.regs[i].count.shareds))
-		    {
-			DeadlockWrite("F%u/T%u(%llu) unable to clear the dependent registers",
-				     (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
-			return FAILED;
-		    }
-		}	
-	    }
+			if (family.hasShareds && family.physBlockSize > 1)
+			{
+				// Mark 'previous thread cleaned up' on the next thread
+				if (thread.nextInBlock == INVALID_TID || thread.nextInBlock == tid) //[FT]when master BS bigger than redundant, the actual usage of BS is smaller than physBS in master family.
+				{
+					COMMIT{ family.prevCleanedUp = true; }
+					DebugSimWrite("F%u/T%u(%llu) marking PREV_CLEANED_UP on family (no next thread)",
+						(unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
+				}
+				else if (!DecreaseThreadDependency(thread.nextInBlock, THREADDEP_PREV_CLEANED_UP))
+				{
+					DeadlockWrite("F%u/T%u(%llu) marking PREV_CLEANED_UP on next T%u",
+							(unsigned)fid, (unsigned)tid, (unsigned long long)thread.index,
+							(unsigned)thread.nextInBlock);
+					return FAILED;
+				}
+			}
 
-	    if (family.hasShareds && family.physBlockSize > 1)
-	    {
-		// Mark 'previous thread cleaned up' on the next thread
-		if (thread.nextInBlock == INVALID_TID || thread.nextInBlock == tid) //[FT]when master BS bigger than redundant, the actual usage of BS is smaller than physBS in master family.
-		{
-		    COMMIT{ family.prevCleanedUp = true; }
-		    DebugSimWrite("F%u/T%u(%llu) marking PREV_CLEANED_UP on family (no next thread)",
-				(unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
-		}
-		else if (!DecreaseThreadDependency(thread.nextInBlock, THREADDEP_PREV_CLEANED_UP))
-		{
-		    DeadlockWrite("F%u/T%u(%llu) marking PREV_CLEANED_UP on next T%u",
-				    (unsigned)fid, (unsigned)tid, (unsigned long long)thread.index,
-				    (unsigned)thread.nextInBlock);
-		    return FAILED;
-		}
-	    }
-
-	    COMMIT
-	    {
-		// Unreserve the TLS memory
-		// Non-FT mode or master thread in FT mode
-		if (family.redundant == 0)
-		{
-		    const MemAddr tls_base = m_parent.GetTLSAddress(fid, tid);
-		    const MemSize tls_size = m_parent.GetTLSSize();
-		    m_parent.UnmapMemory(tls_base+tls_size/2, tls_size/2);
-		}
-	    }
-
-        //FT-BEGIN
+			COMMIT
+			{
+				// Unreserve the TLS memory
+				// Non-FT mode or master thread in FT mode
+				if (family.redundant == 0)
+				{
+					const MemAddr tls_base = m_parent.GetTLSAddress(fid, tid);
+					const MemSize tls_size = m_parent.GetTLSSize();
+					m_parent.UnmapMemory(tls_base+tls_size/2, tls_size/2);
+				}
+			}
         }
         //FT-END
 
@@ -1116,79 +1103,76 @@ Result Processor::Allocator::DoThreadAllocate()
         //FT-BEGIN
         else 
         {
-	    //ftmode
-	    if(family.ftmode)
-	    {
-		//master family  
-		if (!family.redundant)
-		{	
-		    //the mathing thread in redundant thread is not created	
-		    if (family.rthreadCount == 0)
-		    {
-			if(m_cleanup.Push(tid))
+			//ftmode
+			if(family.ftmode)
 			{
-			    COMMIT{ thread.cleanupFlag = 1; }
-			    DebugSimWrite("F%u/T%u(%llu) is pushed in to m_cleanup again",(unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
-			    return SUCCESS;
-			}
-			else
-			{
-			    DebugSimWrite("F%u/T%u(%llu) can not be pushed in to m_cleanup again",(unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
-			    return FAILED;
-			}
-		    }   
-		    else
-		    {
-			COMMIT 
-			{
-			    family.rthreadCount--;
-			    thread.cleanupFlag = 0; 
-			}
+				//master family  
+				if (!family.redundant)
+				{	
+					//the mathing thread in redundant thread is not created	
+					if (family.rthreadCount == 0)
+					{
+						if(m_cleanup.Push(tid))
+						{
+							COMMIT{ thread.cleanupFlag = 1; }
+							DebugSimWrite("F%u/T%u(%llu) is pushed in to m_cleanup again",(unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
+							return SUCCESS;
+						}
+						else
+						{
+							DebugSimWrite("F%u/T%u(%llu) can not be pushed in to m_cleanup again",(unsigned)fid, (unsigned)tid, (unsigned long long)thread.index);
+							return FAILED;
+						}
+					}   
+					else
+					{
+						COMMIT 
+						{
+							family.rthreadCount--;
+							thread.cleanupFlag = 0; 
+						}
 			
-			RemoteMessage msg;
-			msg.type                   = RemoteMessage::MSG_MASTERTID;
-			msg.mtid.pid               = m_parent.GetPID()+1-(m_parent.GetPID()%2)*2;
-			msg.mtid.lfid              = family.corr_fid;
-			msg.mtid.tid               = tid;
-			msg.mtid.index             = family.start;
+						RemoteMessage msg;
+						msg.type                   = RemoteMessage::MSG_MASTERTID;
+						msg.mtid.pid               = m_parent.GetPID()+1-(m_parent.GetPID()%2)*2;
+						msg.mtid.lfid              = family.corr_fid;
+						msg.mtid.tid               = tid;
+						msg.mtid.index             = family.start;
 			
-			if (!m_network.SendMessage(msg))
-			{
-			    DeadlockWrite("Unable to send masterTID, m_cleanup");
-			    return FAILED;
-			}
-		    }
-		}
-		else //redundant family
-		{
-		    //send message to make 'threadCount' in master family increment 
-		    RemoteMessage msg;
-		    msg.type                   = RemoteMessage::MSG_RTHREADCOUNT;
-		    msg.rtc.pid                = m_parent.GetPID()+1-(m_parent.GetPID()%2)*2;
-		    msg.rtc.lfid               = family.corr_fid;
-		    msg.rtc.tid                = tid; 
+						if (!m_network.SendMessage(msg))
+						{
+							DeadlockWrite("Unable to send masterTID, m_cleanup");
+							return FAILED;
+						}
+					}
+				}
+				else //redundant family
+				{
+					//send message to make 'threadCount' in master family increment 
+					RemoteMessage msg;
+					msg.type                   = RemoteMessage::MSG_RTHREADCOUNT;
+					msg.rtc.pid                = m_parent.GetPID()+1-(m_parent.GetPID()%2)*2;
+					msg.rtc.lfid               = family.corr_fid;
+					msg.rtc.tid                = tid; 
 		    
-		    if (!m_network.SendMessage(msg))
-		    {
-			DeadlockWrite("Unable to send rthreadCount, m_cleanup");
-			return FAILED;
-		    }	
-		}	
-		
-	    }
-            //FT-END
+					if (!m_network.SendMessage(msg))
+					{
+						DeadlockWrite("Unable to send rthreadCount, m_cleanup");
+						return FAILED;
+					}	
+				}	
+			}
+			//FT-END
 
 	    if (!AllocateThread(fid, tid, false))
 	    {
-		DeadlockWrite("F%u/T%u unable to reactivate",
-			    (unsigned)fid, (unsigned)tid);
-		return FAILED;
+			DeadlockWrite("F%u/T%u unable to reactivate",
+					(unsigned)fid, (unsigned)tid);
+			return FAILED;
 	    }
-		
         }
-
+		
         return SUCCESS;
-
     }
 
     assert (!m_alloc.Empty());
@@ -1218,26 +1202,20 @@ Result Processor::Allocator::DoThreadAllocate()
         {
 
             //FT-BEGIN
-			if (family.ftmode)
+			if (family.ftmode && !family.redundant && family.rthreadCount == 0)
 			{
 				//master family
-				if (!family.redundant)
+				//the mathing thread in redundant thread is not created
+				if (!m_alloc.Push(fid))
 				{
-					//the mathing thread in redundant thread is not created
-					if (family.rthreadCount == 0)
-					{
-						if (!m_alloc.Push(fid))
-						{
-							DeadlockWrite("Unable to reinject F%u at back of allocation queue", (unsigned)fid);
-							return FAILED;
-						}
-                    
-						m_alloc.Pop();
-
-						DebugSimWrite("F%u waiting for redundant thread(s)", (unsigned)fid);
-						return SUCCESS;
-					}
+					DeadlockWrite("Unable to reinject F%u at back of allocation queue", (unsigned)fid);
+					return FAILED;
 				}
+                    
+				m_alloc.Pop();
+
+				DebugSimWrite("F%u waiting for redundant thread(s)", (unsigned)fid);
+				return SUCCESS;
 			}
             //FT-END
 
@@ -1400,7 +1378,7 @@ bool Processor::Allocator::QueueFamilyAllocation(const LinkMessage& msg)
     request.binfo.index     = 0;
     //FT-BEGIN
     request.redundant	    = msg.redundant;
-    request.ftmode	    = msg.allocate.ftmode;
+    request.ftmode	    	= msg.allocate.ftmode;
     //FT-END
 
     Buffer<AllocRequest>& allocations = (msg.allocate.suspend ? m_allocRequestsSuspend : m_allocRequestsNoSuspend);
@@ -1514,9 +1492,9 @@ Result Processor::Allocator::DoFamilyAllocate()
         // We have the context
         COMMIT
         {
-            Family& family	= m_familyTable[lfid];
+            Family& family		= m_familyTable[lfid];
             family.redundant	= req.redundant;
-	    family.ftmode	= req.ftmode;
+			family.ftmode		= req.ftmode;
         }
     }
     //FT-END
@@ -1701,7 +1679,7 @@ Result Processor::Allocator::DoFamilyAllocate()
         msg.allocate.completion_reg = req.completion_reg;
         //FT-BEGIN
         msg.redundant               = req.redundant;
-	msg.allocate.ftmode         = req.ftmode;
+		msg.allocate.ftmode         = req.ftmode;
         //FT-END
 
         if (!m_network.SendMessage(msg))
@@ -1735,10 +1713,10 @@ bool Processor::Allocator::QueueCreate(const LinkMessage& msg)
     {
         family.pc    = msg.create.address;  // Already aligned
         family.state = FST_CREATE_QUEUED;
-	//FT-begin
-	family.retry = msg.create.retry;
-	family.st_ctr= msg.create.st_ctr;
-	//FT-end
+		//FT-begin
+		family.retry = msg.create.retry;
+		family.st_ctr= msg.create.st_ctr;
+		//FT-end
     }
 
     for (size_t i = 0; i < NUM_REG_TYPES; ++i)
@@ -1827,30 +1805,30 @@ Result Processor::Allocator::DoRmtwr()
 	
     if (thread.regIndex != INVALID_REG_INDEX)
     {
-	RemoteMessage msg;
-	msg.type                    = RemoteMessage::MSG_RAW_REGISTER;
-	msg.rawreg.pid              = m_parent.GetPID()+1-(m_parent.GetPID()%2)*2;
-	msg.rawreg.addr             = MAKE_REGADDR(RT_INTEGER, thread.regIndex);
-	msg.rawreg.value.m_state    = RST_FULL;
-	msg.rawreg.value.m_integer  = m_parent.PackFID(info.fid);
+		RemoteMessage msg;
+		msg.type                    = RemoteMessage::MSG_RAW_REGISTER;
+		msg.rawreg.pid              = m_parent.GetPID()+1-(m_parent.GetPID()%2)*2;
+		msg.rawreg.addr             = MAKE_REGADDR(RT_INTEGER, thread.regIndex);
+		msg.rawreg.value.m_state    = RST_FULL;
+		msg.rawreg.value.m_integer  = m_parent.PackFID(info.fid);
 
-	if (!m_network.SendMessage(msg))
-	{
-	    DeadlockWrite("Unable to send rmtwr to CPU%u", (unsigned)msg.rawreg.pid);
-	    return FAILED;
-	}
+		if (!m_network.SendMessage(msg))
+		{
+			DeadlockWrite("Unable to send rmtwr to CPU%u", (unsigned)msg.rawreg.pid);
+			return FAILED;
+		}
     }
     else
     {
     	assert(thread.regIndex == INVALID_REG_INDEX);
 
-	if (!m_rmtwr.Push(info))
-	{
-	    // This shouldn't happen; the buffer should be large enough
-	    // to accomodate all thread events (thread table size).
-	    assert(false);
-	    return FAILED;
-	}
+		if (!m_rmtwr.Push(info))
+		{
+			// This shouldn't happen; the buffer should be large enough
+			// to accomodate all thread events (thread table size).
+			assert(false);
+			return FAILED;
+		}
     }
 
     return SUCCESS;
@@ -1862,7 +1840,7 @@ bool Processor::Allocator::SetRegIndex(TID tid, RegIndex index)
 	
     COMMIT
     {
-	Thread& thread  = m_threadTable[tid];
+		Thread& thread  = m_threadTable[tid];
         thread.regIndex = index;
     }
 
@@ -2095,8 +2073,8 @@ Result Processor::Allocator::DoFamilyCreate()
 
         // Read the register counts from the cache-line
         //Instruction counts;
-	uint64_t counts; //[FT] Read the register counts and retry para. from the cache-line
-	Instruction retry;
+		uint64_t counts; //[FT] Read the register counts and retry para. from the cache-line
+		Instruction retry;
 
         if (family.nThreads > 0)
         {
@@ -2111,17 +2089,17 @@ Result Processor::Allocator::DoFamilyCreate()
                 DeadlockWrite("Unable to release cache line for F%u", (unsigned)info.fid);
                 return FAILED;
             }
-	    //FT-begin
-	    Instruction retry_counts = counts >> 32;
-	    retry = UnserializeInstruction(&retry_counts);
-	    counts = UnserializeInstruction(&counts);
-	    //FT-end
+			//FT-begin
+			Instruction retry_counts = counts >> 32;
+			retry = UnserializeInstruction(&retry_counts);
+			counts = UnserializeInstruction(&counts);
+			//FT-end
         }
         else
         {
             // Empty family, reduce all counts to 0.
             counts = 0;
-	    retry  = 0; //FT
+			retry  = 0; //FT
         }
 
         COMMIT
@@ -2153,15 +2131,15 @@ Result Processor::Allocator::DoFamilyCreate()
                 family.regs[i].count = regcounts[i];
             }
 
-	    //FT-begin
-	    family.retry  = retry & 0x1;
-	    family.st_ctr = retry >> 1;
-	    if (family.st_ctr > 4)  //the maximun write within a thread
-	    {
-		family.retry = 0;
-		family.st_ctr = 0;
-	    }
-	    //FT-end
+			//FT-begin
+			family.retry  = retry & 0x1;
+			family.st_ctr = retry >> 1;
+			if (family.st_ctr > 4)  //the maximun write within a thread
+			{
+				family.retry = 0;
+				family.st_ctr = 0;
+			}
+			//FT-end
 
             family.hasShareds = hasShareds;
         }
@@ -2230,8 +2208,8 @@ Result Processor::Allocator::DoFamilyCreate()
             //this core is the 1st core in the place
             //if it is an odd core, it is a redundnat family; or it is a master family.
             msg.redundant       = (bool)(m_parent.GetPID() % 2);
-	    msg.create.retry	= family.retry;
-	    msg.create.st_ctr	= family.st_ctr;
+			msg.create.retry	= family.retry;
+			msg.create.st_ctr	= family.st_ctr;
             //FT-END
 			
             for (size_t i = 0; i < NUM_REG_TYPES; i++)
