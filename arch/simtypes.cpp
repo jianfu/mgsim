@@ -35,9 +35,9 @@ const char* GetRemoteRegisterTypeString(RemoteRegType type)
     case RRT_GLOBAL:          return "global";
     case RRT_FIRST_DEPENDENT: return "first shared";
     case RRT_LAST_SHARED:     return "last shared";
-    default:                  assert(false); break;
+    default:
+        UNREACHABLE;
     }
-    return "unknown";
 }
 
 string RegAddr::str() const
@@ -96,16 +96,13 @@ string RegValue::str(RegType type) const
         stringstream ss;
         ss << "[F:" << setw(sizeof(Integer) * 2) << setfill('0') << hex;
         if (type == RT_FLOAT)
-            ss << m_float.integer;
+            ss << m_float.integer << "] " << dec << m_float.floating;
         else
-            ss << m_integer;
-        ss << ']';
+            ss << m_integer << "] " << dec << m_integer;
         return ss.str();
     }
-    default:
-        assert(0); // can't be here
-        return "UNKNOWN";
     }
+    UNREACHABLE;
 }
 
 ostream& operator << (ostream& output, const RegAddr& reg)

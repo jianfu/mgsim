@@ -29,16 +29,31 @@ static const uint32_t A_INT_FUNC_MASK = 0x7F;
 static const uint32_t A_FLT_FUNC_MASK = 0x7FF;
 static const uint32_t A_LITERAL_MASK  = 0xFF;
 
-static void ThrowIllegalInstructionException(Object& obj, MemAddr pc)
+// Function for naming local registers according to a standard ABI
+const vector<string>& GetDefaultLocalRegisterAliases(RegType type)
 {
-    stringstream error;
-    error << "Illegal instruction at "
-          << hex << setw(sizeof(MemAddr) * 2) << setfill('0') << pc;
-    throw IllegalInstructionException(obj, error.str());
+    static const vector<string> intnames = {
+        "rv",   "t0",  "t1", "t2",
+        "t3",   "t4",  "t5", "t6",
+        "t7",   "s0",  "s1", "s2",
+        "s3",   "s4",  "s5", "fp",
+        "a0",   "a1",  "a2", "a3",
+        "a4",   "a5",  "t8", "t9",
+        "t10",  "t11", "ra", "pv",
+        "at",   "gp",  "sp", "31" };
+    static const vector<string> fltnames = {
+        "f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7",
+        "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15",
+        "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23",
+        "f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31" };
+    if (type == RT_INTEGER)
+        return intnames;
+    else
+        return fltnames;
 }
 
 // Function for getting a register's type and index within that type
-unsigned char GetRegisterClass(unsigned char addr, const RegsNo& regs, RegClass* rc)
+unsigned char GetRegisterClass(unsigned char addr, const RegsNo& regs, RegClass* rc, RegType /*type*/)
 {
     assert(regs.globals < 32);
     assert(regs.shareds < 32);
@@ -498,7 +513,6 @@ bool Processor::Pipeline::ExecuteStage::ExecuteINTS(PipeValue& Rcv, const PipeVa
     return true;
 }
 
-/*static*/
 bool Processor::Pipeline::ExecuteStage::ExecuteINTM(PipeValue& Rcv, const PipeValue& Rav, const PipeValue& Rbv, int func)
 {
     Rcv.m_state = RST_FULL;
@@ -513,11 +527,12 @@ bool Processor::Pipeline::ExecuteStage::ExecuteINTM(PipeValue& Rcv, const PipeVa
         case A_INTMFUNC_MULQ_V:
         case A_INTMFUNC_MULQ:  mul128b(Ra, Rb, NULL, &Rc); break;
         case A_INTMFUNC_UMULH: mul128b(Ra, Rb, &Rc, NULL); break;
-        case A_INTMFUNC_DIVL:  Rc = (int64_t)(int32_t)((int32_t)Ra / (int32_t)Rb); break;
-        case A_INTMFUNC_DIVQ:  Rc = (int64_t)Ra / (int64_t)Rb; break;
-        case A_INTMFUNC_UDIVL: Rc = (uint64_t)(uint32_t)((uint32_t)Ra / (uint32_t)Rb); break;
-        case A_INTMFUNC_UDIVQ: Rc = Ra / Rb; break;
-        default: assert(0); Rc = 0; break;
+#define CHECKDIV0(X) if ((X) == 0) ThrowIllegalInstructionException(*this, m_input.pc, "Division by zero")
+        case A_INTMFUNC_DIVL:  CHECKDIV0((int32_t)Rb);  Rc = (int64_t)(int32_t)((int32_t)Ra / (int32_t)Rb); break;
+        case A_INTMFUNC_DIVQ:  CHECKDIV0((int64_t)Rb);  Rc = (int64_t)Ra / (int64_t)Rb; break;
+        case A_INTMFUNC_UDIVL: CHECKDIV0((uint32_t)Rb); Rc = (uint64_t)(uint32_t)((uint32_t)Ra / (uint32_t)Rb); break;
+        case A_INTMFUNC_UDIVQ: CHECKDIV0(Rb);           Rc = Ra / Rb; break;
+        default: UNREACHABLE; break;
     }
     Rcv.m_integer = Rc;
     return true;
@@ -1194,20 +1209,20 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
         }
         else
         {
-            bool (*execfunc)(PipeValue&, const PipeValue&, const PipeValue&, int) = NULL;
+            bool (Processor::Pipeline::ExecuteStage::*execfunc)(PipeValue&, const PipeValue&, const PipeValue&, int) = NULL;
 
             FPUOperation fpuop = FPU_OP_NONE;
             switch (m_input.opcode)
             {
-                case A_OP_INTA: execfunc = ExecuteINTA; break;
-                case A_OP_INTL: execfunc = ExecuteINTL; break;
-                case A_OP_INTS: execfunc = ExecuteINTS; break;
-                case A_OP_INTM: execfunc = ExecuteINTM; break;
-                case A_OP_FLTV: execfunc = ExecuteFLTV; break;
-                case A_OP_FLTL: execfunc = ExecuteFLTL; break;
-                case A_OP_FPTI: execfunc = ExecuteFPTI; break;
+                case A_OP_INTA: execfunc = &Processor::Pipeline::ExecuteStage::ExecuteINTA; break;
+                case A_OP_INTL: execfunc = &Processor::Pipeline::ExecuteStage::ExecuteINTL; break;
+                case A_OP_INTS: execfunc = &Processor::Pipeline::ExecuteStage::ExecuteINTS; break;
+                case A_OP_INTM: execfunc = &Processor::Pipeline::ExecuteStage::ExecuteINTM; break;
+                case A_OP_FLTV: execfunc = &Processor::Pipeline::ExecuteStage::ExecuteFLTV; break;
+                case A_OP_FLTL: execfunc = &Processor::Pipeline::ExecuteStage::ExecuteFLTL; break;
+                case A_OP_FPTI: execfunc = &Processor::Pipeline::ExecuteStage::ExecuteFPTI; break;
                 case A_OP_ITFP:
-                    execfunc = ExecuteITFP;
+                    execfunc = &Processor::Pipeline::ExecuteStage::ExecuteITFP;
                     switch (m_input.function)
                     {
                         // IEEE Floating Square Root
@@ -1225,7 +1240,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
                     break;
 
                 case A_OP_FLTI:
-                    execfunc = ExecuteFLTI;
+                    execfunc = &Processor::Pipeline::ExecuteStage::ExecuteFLTI;
                     switch (m_input.function)
                     {
                         case A_FLTIFUNC_ADDS:      case A_FLTIFUNC_ADDS_C:    case A_FLTIFUNC_ADDS_D:   case A_FLTIFUNC_ADDS_M:
@@ -1277,7 +1292,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
 
             PipeValue Rcv;
             Rcv.m_size = m_input.RcSize;
-            if ((*execfunc)(Rcv, m_input.Rav, m_input.Rbv, m_input.function))
+            if ((this->*execfunc)(Rcv, m_input.Rav, m_input.Rbv, m_input.function))
             {
                 // Operation completed
                 COMMIT {
@@ -1345,7 +1360,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
         break;
 
     default:
-        ThrowIllegalInstructionException(*this, m_input.pc);
+        ThrowIllegalInstructionException(*this, m_input.pc, "Unknown instruction format: %#x", (int)m_input.format);
         break;
     }
     return PIPE_CONTINUE;

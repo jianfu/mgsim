@@ -101,7 +101,7 @@ private:
         {
         case RT_INTEGER: return m_integers;
         case RT_FLOAT:   return m_floats;
-        default: assert(0);
+        default: UNREACHABLE;
         }
     }
     const std::vector<RegValue>& PickFile(RegType t) const
@@ -110,7 +110,7 @@ private:
         {
         case RT_INTEGER: return m_integers;
         case RT_FLOAT:   return m_floats;
-        default: assert(0);
+        default: UNREACHABLE;
         }
     }
 
@@ -127,6 +127,10 @@ private:
     std::pair<RegAddr, RegValue> m_updates[MAX_UPDATES];
     unsigned int                 m_nUpdates;
 
+    // Administrative
+    std::vector<std::string> m_integer_local_aliases;
+    std::vector<std::string> m_float_local_aliases;
+    
 };
 
 #endif

@@ -137,6 +137,11 @@ namespace Simulator
             throw exceptf<InvalidArgumentException>(*this, "RPCLineSize cannot be zero");
         }
 
+        p_queue.SetStorageTraces(m_incoming);
+        p_argumentFetch.SetStorageTraces(m_iobus.GetReadRequestTraces(m_devid) ^ m_ready);
+        p_processRequests.SetStorageTraces(m_completed);
+        p_writeResponse.SetStorageTraces(m_iobus.GetWriteRequestTraces() ^ m_iobus.GetReadRequestTraces(m_devid) ^ m_notifications);
+        p_sendCompletionNotifications.SetStorageTraces(m_iobus.GetNotificationTraces());
     }
 
     Result RPCInterface::DoQueue()
@@ -247,9 +252,7 @@ namespace Simulator
             return SUCCESS;
         }
         }
-        // unreachable
-        assert(false);
-        return SUCCESS;
+        UNREACHABLE;
     }
 
 
@@ -409,9 +412,7 @@ namespace Simulator
             return SUCCESS;
         }
         }
-        // unreachable
-        assert(false);
-        return SUCCESS;
+        UNREACHABLE;
     }
 
     Result RPCInterface::DoSendCompletionNotifications()

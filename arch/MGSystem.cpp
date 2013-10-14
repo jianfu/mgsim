@@ -311,7 +311,8 @@ void MGSystem::PrintCoreStats(ostream& os) const {
 
     // print the data
 
-    os << "## core statistics:" << endl
+    os << dec << setfill(' ')
+       << "## core statistics:" << endl
        << "# P " << sep
        << fi << "iops" << sep
        << fi << "flops" << sep
@@ -438,11 +439,12 @@ void MGSystem::PrintState(const vector<string>& /*unused*/) const
                     cout << "  - " << process->GetName() << " (";
                     switch (process->GetState())
                     {
-                    case STATE_IDLE:     assert(0); break;
                     case STATE_ACTIVE:   cout << "active"; break;
                     case STATE_DEADLOCK: cout << "stalled"; break;
                     case STATE_RUNNING:  cout << "running"; break;
-                    case STATE_ABORTED:  assert(0); break;
+                    case STATE_IDLE:
+                    case STATE_ABORTED:  
+                        UNREACHABLE; break;
                     }
                     cout << ')' << endl;
                 }
@@ -552,7 +554,7 @@ void MGSystem::Step(CycleNo nCycles)
                     ++num_active;
                     break;
                 default:
-                    assert(false);
+                    UNREACHABLE;
                     break;
                 }
             }

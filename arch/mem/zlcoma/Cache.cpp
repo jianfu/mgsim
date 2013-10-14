@@ -259,7 +259,7 @@ Result ZLCOMA::Cache::OnMessageReceived(Message* msg)
         return SUCCESS;
 
     default:
-        assert(false);
+        UNREACHABLE;
         break;
     }
     return FAILED;

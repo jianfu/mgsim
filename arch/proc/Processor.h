@@ -2,6 +2,7 @@
 #define PROCESSOR_H
 
 #include <sim/inspect.h>
+#include <sim/unreachable.h>
 #include <arch/IOBus.h>
 #include <arch/Memory.h>
 #include <arch/BankSelector.h>
@@ -14,6 +15,8 @@ namespace Simulator
 namespace counters {};
 class FPU;
 
+const std::vector<std::string>& GetDefaultLocalRegisterAliases(RegType type);
+
 class Processor : public Object
 {
 public:
@@ -22,7 +25,6 @@ public:
 #include "FamilyTable.h"
 #include "ThreadTable.h"
 #include "RegisterFile.h"
-#include "AncillaryRegisterFile.h"
 #include "Network.h"
 #include "ICache.h"
 #include "IOMatchUnit.h"
@@ -35,6 +37,7 @@ public:
 #include "PerfCounters.h"
 #include "MMUInterface.h"
 #include "ActionInterface.h"
+#include "AncillaryRegisterFile.h"
 
     Processor(const std::string& name, Object& parent, Clock& clock, PID pid, const std::vector<Processor*>& grid, IMemory& memory, IMemoryAdmin& admin, FPU& fpu, IIOBus *iobus, Config& config);
     Processor(const Processor&) = delete;
