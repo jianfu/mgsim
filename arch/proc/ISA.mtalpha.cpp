@@ -1266,10 +1266,10 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
             {
                 // Currently an allocate is valid when the function is like:
                 // 1000000, 1000001, 1000011 ie no flags, only S or both S and X
-                if (m_input.function ^ A_UTHREAD_ALLOC_VALUE &&
-                   (m_input.function ^ A_UTHREAD_ALLOC_VALUE) ^ A_UTHREAD_ALLOC_S_MASK &&
-                   (m_input.function ^ A_UTHREAD_ALLOC_VALUE) ^ (A_UTHREAD_ALLOC_S_MASK | A_UTHREAD_ALLOC_X_MASK))
-                    ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_OPCODE, "Unknown opcode (OP, alloc)");
+                //if (m_input.function ^ A_UTHREAD_ALLOC_VALUE &&
+                //   (m_input.function ^ A_UTHREAD_ALLOC_VALUE) ^ A_UTHREAD_ALLOC_S_MASK &&
+                //   (m_input.function ^ A_UTHREAD_ALLOC_VALUE) ^ (A_UTHREAD_ALLOC_S_MASK | A_UTHREAD_ALLOC_X_MASK))
+                 //   ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_OPCODE, "Unknown opcode (OP, alloc)");
 
                 Integer flags  = Rbv;
                 PlaceID place  = m_parent.GetProcessor().UnpackPlace(Rav);
