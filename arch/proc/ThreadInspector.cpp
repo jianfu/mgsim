@@ -137,7 +137,6 @@ Result Processor::ThreadInspector::DoIncomingOperation()
                         index = op.field - F_REGISTERS;
                     }
 
-
                     Family::RegInfo fri = m_familyTable[FID].regs[type];
                     Thread::RegInfo tri = m_threadTable[op.vtid].regs[type];
 
@@ -357,9 +356,9 @@ Result Processor::ThreadInspector::DoIncomingOperation()
 
                     // We can only write our result if the register may not be
                     // overwritten later on
-                    if (value.m_state != RST_FULL)
+                    if (value.m_state == RST_PENDING || value.m_state == RST_WAITING)
                     {
-                        DeadlockWrite("Register %s not full", reg.str().c_str());
+                        DeadlockWrite("Register %s not still pending (%d)", reg.str().c_str(), value.m_state);
                         return FAILED;
                     }
 
