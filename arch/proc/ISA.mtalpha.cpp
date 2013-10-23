@@ -1165,7 +1165,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
 					if ( place.size == 1 && family.redundant && family.ftmode)//return the master's PID for reundant family when size is 1
 						place.pid  = m_parent.GetProcessor().GetPID() + 1 - (m_parent.GetProcessor().GetPID()%2)*2;
 					else 
-                        //FT-END
+                    //FT-END
 						place.pid  = m_parent.GetProcessor().GetPID() & -place.size;
 					
                     place.capability = 0x1337; // later: find a proper substitute
@@ -1217,7 +1217,13 @@ Processor::Pipeline::PipeAction Processor::Pipeline::ExecuteStage::ExecuteInstru
 
                 case A_UTHREAD_BREAK: COMMIT { m_output.Rc = INVALID_REG; ExecBreak(); } break;
                 case A_UTHREAD_TRAP:
-                    ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_BREAKPOINT, "Software breakpoint");
+				{
+				    Family& family = m_familyTable[m_input.fid];
+					Thread& thread = m_threadTable[m_input.tid];
+					if ((family.ftmode == 0 || !family.redundant) && !thread.recover) //non-ft mode or master thread, and it is not a recover thread
+						ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_BREAKPOINT, "Software breakpoint");
+					break;
+				}
                 case A_UTHREAD_PRINT: COMMIT { m_output.Rc = INVALID_REG; ExecDebug(Rav, Rbv); } break;
                 default: ThrowIllegalInstructionExceptionWithExcp(*this, m_input.pc, EXCP_INVALID_OPCODE, "Unknown opcode (OP, local)");
                 }
