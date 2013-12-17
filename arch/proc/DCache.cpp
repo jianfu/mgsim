@@ -300,10 +300,6 @@ Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAdd
 
 		COMMIT
 		{
-			line->state		    = LINE_LOADING;
-			line->processing	    = false;
-			std::fill(line->valid, line->valid+m_lineSize, false);
-
 			if (reg != NULL && reg->valid())
 			{
 				// We're loading to a valid register, queue it
@@ -315,6 +311,17 @@ Result Processor::DCache::Read(MemAddr address, void* data, MemSize size, RegAdd
 			{
 				line->create  = true;
 			}
+		}
+
+		//Ignore the read request if hit a loading line
+		if (line->state == LINE_LOADING)
+			return DELAYED;
+
+		COMMIT
+		{
+			line->state		    = LINE_LOADING;
+			line->processing	    = false;
+			std::fill(line->valid, line->valid+m_lineSize, false);
 		}
 
 		//Send read request to memory as read miss in DCache
