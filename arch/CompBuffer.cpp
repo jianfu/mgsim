@@ -238,7 +238,7 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
 
 				for (request_buffer::iterator p = m_compBuffer[mtid].begin(); p != m_compBuffer[mtid].end(); ++p)
 				{
-					COMMIT {count ++;}
+					count ++;
 
 					//current write and p come from different thread, and p is not compared.
 					if(p->redundant != redundant && !p->comp)
@@ -319,8 +319,8 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
 							p->comp	    = 1;
 							p->client1	= line.client;
 							p->wid1	    = line.wid;
-							flag	    = 1;
 						}
+						flag	    = 1;
 						break;
 					}
 				}
@@ -350,14 +350,15 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
 							return false;
 						}
 
-						while(!m_compBuffer[mtid].empty())
-							COMMIT{ m_compBuffer[mtid].pop_front(); }
+						COMMIT
+						{
+							m_compBuffer[mtid].clear();
 
-						if (coming_from_right == redundant)
-							m_error0[mtid] = 0;
-						else
-							m_error1[mtid] = 0;
-
+							if (coming_from_right == redundant)
+								m_error0[mtid] = 0;
+							else
+								m_error1[mtid] = 0;
+						}
 						return true;
 					}
 
@@ -539,13 +540,21 @@ bool CompBuffer::Recover(MCID client0, WClientID wid0, MCID client1, WClientID w
 		temp_wid1 = wid1 | (1<<9);
     }
 
-    if (!m_clients[client0]->OnMemoryWriteCompleted(temp_wid0) || !m_clients[client1]->OnMemoryWriteCompleted(temp_wid1))
+	Response response;
+    response.type           = RECOVER;
+    response.wid0           = temp_wid0;
+    response.client0        = client0;
+    response.wid1           = temp_wid1;
+    response.client1        = client1;
+
+    if (!m_incoming.Push(response))
     {
-		DeadlockWrite("Unable to process write completion (Recover) for client %u and client %u, CB", (unsigned)client0, (unsigned)client1);
-		return false;
+        DeadlockWrite("Unable to push request to incoming buffer, CB-Recover.");
+        return false;
     }
 
     return true;
+
 }
 
 bool CompBuffer::OnMemoryReadCompleted(MemAddr addr, const char* data, MCID client)
@@ -726,7 +735,35 @@ Result CompBuffer::DoIncoming()
         }
         break;
     }
-    default: assert(0);
+
+	case RECOVER:
+	{
+		MCID client0, client1;
+		WClientID wid0, wid1;
+		if (response.client0 < response.client1)
+		{
+			client0 = response.client0;
+			client1 = response.client1;
+			wid0    = response.wid0;
+			wid1    = response.wid1;
+		}
+		else
+		{
+			client0 = response.client1;
+			client1 = response.client0;
+			wid0    = response.wid1;
+			wid1    = response.wid0;
+		}
+
+		if (!m_clients[client0]->OnMemoryWriteCompleted(wid0) || !m_clients[client1]->OnMemoryWriteCompleted(wid1))
+		{
+			DeadlockWrite("Unable to process write completion (Recover) for client %u and client %u, CB", (unsigned)client0, (unsigned)client1);
+			return FAILED;
+		}
+
+		break;
+	}
+	default: assert(0);
     }
 
     m_incoming.Pop();

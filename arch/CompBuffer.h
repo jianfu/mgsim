@@ -40,6 +40,7 @@ namespace Simulator
         {
             READ,
             WRITE,
+			RECOVER,
         };
 
         struct Response
