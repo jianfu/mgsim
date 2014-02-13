@@ -82,7 +82,8 @@ MCID CompBuffer::RegisterClient(IMemoryCallback& callback, Process& process, Sto
     p_service.AddCyclicProcess(process);
     //p_service.AddProcess(process);
 
-    traces = (opt(m_incoming) ^ m_outgoing) * traces;
+	//The number of opt(m_outgoing) is decided by how many stores are committed in CB at the same time, i.e., st_ctr of a thread.
+    traces = (opt(m_incoming) ^ m_outgoing * opt(m_outgoing) * opt(m_outgoing) * opt(m_outgoing) * opt(m_outgoing)) * traces;
 
     m_storages *= opt(storage);
     //p_Incoming will forward OnMemoryxxx from memroy to L1
@@ -263,12 +264,13 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
 									COMMIT
 									{
 										printf("%08lld: A recoverable mask error is detected in cb%u: %#016llx, (%d/%d)\n", (unsigned long long)GetCycleNo(), (unsigned)m_mcid, (unsigned long long)address, (unsigned)count, (unsigned)st_ctr);
-
-										if (coming_from_right == redundant)
-											m_error0[mtid] = 1;
-										else
-											m_error1[mtid] = 1;
 									}
+
+									if (coming_from_right == redundant)
+										m_error0[mtid] = 1;
+									else
+										m_error1[mtid] = 1;
+
 									break;
 								}
 							}
@@ -288,12 +290,13 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
 									COMMIT
 									{
 										printf("%08lld: A recoverable data error is detected in cb%u: %#016llx, (%d/%d)\n", (unsigned long long)GetCycleNo(), (unsigned)m_mcid, (unsigned long long)address, (unsigned)count, (unsigned)st_ctr);
-
-										if (coming_from_right == redundant)
-											m_error0[mtid] = 1;
-										else
-											m_error1[mtid] = 1;
 									}
+
+									if (coming_from_right == redundant)
+										m_error0[mtid] = 1;
+									else
+										m_error1[mtid] = 1;
+
 									break;
 								}
 							}
@@ -304,13 +307,12 @@ bool CompBuffer::Write(MCID id, MemAddr address, const MemData& data, WClientID 
 							COMMIT
 							{
 								printf("%08lld: A recoverable address error is detected in cb%u: %#016llx, (%d/%d)\n", (unsigned long long)GetCycleNo(), (unsigned)m_mcid, (unsigned long long)address, (unsigned)count, (unsigned)st_ctr);
-	
-								if (coming_from_right == redundant)
-									m_error0[mtid] = 1;
-								else
-									m_error1[mtid] = 1;
-
 							}
+
+							if (coming_from_right == redundant)
+								m_error0[mtid] = 1;
+							else
+								m_error1[mtid] = 1;
 						}
 
 						//Comparison finished!
