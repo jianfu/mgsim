@@ -25,10 +25,21 @@ struct VarInfo
     VarInfo& operator=(const VarInfo&) = default;
 };
 
-typedef map<string, VarInfo> var_registry_t;
+typedef std::map<string, VarInfo> var_registry_t;
 
 static
 var_registry_t registry;
+
+void* GetSampleVariable(const string& name, size_t& width) 
+{
+    auto f = registry.find(name);
+	if (f == registry.end())
+		return NULL;
+
+	width = f->second.width;
+	return f->second.var;
+}
+
 
 void _RegisterSampleVariable(void *var, size_t width, const string& name, SampleVariableDataType type, SampleVariableCategory cat, void *maxval)
 {

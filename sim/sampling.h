@@ -47,7 +47,7 @@ void RegisterSampleVariable(T& var, const std::string& name, SampleVariableCateg
 
 void ListSampleVariables(std::ostream& os, const std::string &pat = "*");
 bool ReadSampleVariables(std::ostream& os, const std::string &pat = "*"); // returns "false" if no variables match.
-
+void* GetSampleVariable(const std::string& name, size_t& width);
 
 class Config;
 

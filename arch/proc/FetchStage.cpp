@@ -185,6 +185,7 @@ Processor::Pipeline::FetchStage::FetchStage(Pipeline& parent, Clock& clock, Fetc
     }
 
     m_buffer = new char[m_icache.GetLineSize()];
+	RegisterSampleVariableInObject(m_pc, SVC_STATE);
 }
 
 Processor::Pipeline::FetchStage::~FetchStage()

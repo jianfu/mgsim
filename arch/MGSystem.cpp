@@ -507,7 +507,7 @@ void MGSystem::Step(CycleNo nCycles)
         for (Processor* p : m_procs)
             if (!p->IsIdle())
             {
-                state = STATE_DEADLOCK;
+                //state = STATE_DEADLOCK;
                 break;
             }
 
@@ -963,6 +963,19 @@ MGSystem::MGSystem(Config& config, bool quiet)
         memadmin->Reserve(address, size, pid, perm);
     }
 
+		// BEGIN FT
+	bool fi_enabled = config.getValueOrDefault<bool>("FaultInjection.Enable", false);
+	if (fi_enabled) {
+		CycleNo cycle = config.getValue<CycleNo>("FaultInjection.Cycle");
+		FaultInjector::FaultType type = static_cast<FaultInjector::FaultType>(config.getValue<int>("FaultInjection.Type"));
+		std::string cname = config.getValue<string>("FaultInjection.ComponentName");
+		std::string fname = config.getValue<string>("FaultInjection.FieldName");
+		unsigned int bitpos = config.getValue<unsigned int>("FaultInjection.BitPosition");
+		
+		m_kernel.GetFaultInjector().DefineFaultPoint(cycle, type, cname, fname, bitpos);
+	}
+    // END FT
+	
     // Set program debugging per default
     m_kernel.SetDebugMode(Kernel::DEBUG_PROG);
 

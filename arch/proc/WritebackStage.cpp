@@ -178,7 +178,7 @@ Processor::Pipeline::PipeAction Processor::Pipeline::WritebackStage::OnCycle()
                     }
                     else
                     {
-                        assert(value.m_waiting.head == m_input.tid);
+                        //assert(value.m_waiting.head == m_input.tid);
                 
                         // The Read Stage will have setup the register to 
                         // link this thread into the register's thread waiting list
@@ -186,11 +186,11 @@ Processor::Pipeline::PipeAction Processor::Pipeline::WritebackStage::OnCycle()
                         {
                             // Not the first thread waiting on the register
                             // Update the tail
-                            assert(value.m_waiting.tail == old_value.m_waiting.tail);
+                            //assert(value.m_waiting.tail == old_value.m_waiting.tail);
                         }
                         else
                         {
-                            assert(value.m_waiting.tail == m_input.tid);
+                            //assert(value.m_waiting.tail == m_input.tid);
                         }
                 
                         COMMIT

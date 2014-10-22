@@ -21,7 +21,13 @@ Processor::ThreadTable::ThreadTable(const std::string& name, Processor& parent, 
     RegisterSampleVariableInObject(m_maxalloc, SVC_WATERMARK, m_threads.size());
     RegisterSampleVariableInObject(m_curalloc, SVC_LEVEL, m_threads.size());
     RegisterSampleVariableInObject(m_lastcycle, SVC_CUMULATIVE);
-
+    RegisterSampleVariableInObject(m_threads[0].pc, SVC_STATE);
+	RegisterSampleVariableInObject(m_threads[0].family, SVC_STATE);
+	RegisterSampleVariableInObject(m_threads[0].next, SVC_STATE);
+	RegisterSampleVariableInObject(m_threads[0].cid, SVC_STATE);
+	RegisterSampleVariableInObject(m_threads[0].dependencies.numPendingWrites, SVC_STATE);
+	RegisterSampleVariableInObject(m_threads[0].regs[0].locals, SVC_STATE);
+	
     for (TID i = 0; i < m_threads.size(); ++i)
     {
         m_threads[i].next  = i + 1;

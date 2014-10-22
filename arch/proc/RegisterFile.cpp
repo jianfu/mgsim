@@ -44,6 +44,38 @@ Processor::RegisterFile::RegisterFile(const std::string& name, Processor& parent
     AddPort(p_pipelineW);
     AddPort(p_asyncW);
 
+	RegisterSampleVariableInObject(m_integers[0].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[1].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[2].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[3].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[4].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[5].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[6].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[7].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[8].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[9].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[10].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[11].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[12].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[13].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[14].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[15].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[16].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[17].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[18].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[19].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[20].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[21].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[22].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[23].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[24].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[25].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[26].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[27].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[28].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[29].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[30].m_integer, SVC_STATE);
+	RegisterSampleVariableInObject(m_integers[31].m_integer, SVC_STATE);
 
     // Register aliases for debugging
     m_integer_local_aliases = config.getWordList("IntRegAliases");
@@ -123,7 +155,7 @@ bool Processor::RegisterFile::WriteRegister(const RegAddr& addr, const RegValue&
 
     if (data.m_state == RST_EMPTY || data.m_state == RST_PENDING)
     {
-        assert(data.m_waiting.head == INVALID_TID);
+        //assert(data.m_waiting.head == INVALID_TID);
     }
 
     const RegValue& value = regs[addr.index];

@@ -788,6 +788,8 @@ Processor::Pipeline::ExecuteStage::ExecuteStage(Pipeline& parent, Clock& clock, 
 {
     RegisterSampleVariableInObject(m_flop, SVC_CUMULATIVE);
     RegisterSampleVariableInObject(m_op, SVC_CUMULATIVE);
+	
+	RegisterSampleVariableInObject(m_output.Rcv.m_integer._64, SVC_STATE);
 }
 
 }

@@ -84,5 +84,27 @@ static inline uint64_t betohll(uint64_t x) {
            ((uint64_t)b[3] << 32) | ((uint64_t)b[2] << 40) | ((uint64_t)b[1] << 48) | ((uint64_t)b[0] << 56);
 }
 
+namespace Simulator {
+	
+	/* Forward declarations, useful for other headers
+	   that cannot / should not depend on kernel.h */
+	
+	class Object;
+	class Mutex;
+	class Kernel;
+	class Arbitrator;
+	class IRegister;
+	class Process;
+	class BreakPointManager;
+	
+/// Cycle Number
+	typedef uint64_t CycleNo;
+	
+
+	
+}
+
+
+
 #endif
 

@@ -9,6 +9,8 @@ SIM_SOURCES = \
 	sim/delegate.h \
 	sim/except.h \
 	sim/except.cpp \
+	sim/faultinjector.h \
+	sim/faultinjector.cpp \
 	sim/inspect.h \
 	sim/inspect.cpp \
 	sim/kernel.h \

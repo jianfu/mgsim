@@ -5,6 +5,7 @@
 #include "delegate.h"
 #include "types.h"
 #include "storagetrace.h"
+#include "faultinjector.h"
 
 #include <vector>
 #include <map>
@@ -15,17 +16,6 @@ namespace Simulator
 {
 
 #define COMMIT  if (IsCommitting())
-
-class Object;
-class Mutex;
-class Kernel;
-class Arbitrator;
-class IRegister;
-class Process;
-class BreakPointManager;
-
-/// Cycle Number
-typedef uint64_t CycleNo;
 
 /// Value representing forever (infinite cycles)
 static const CycleNo INFINITE_CYCLES = (CycleNo)-1;
@@ -248,6 +238,7 @@ private:
     CycleNo             m_lastsuspend;  ///< Avoid suspending twice on the same cycle.
     CycleNo             m_cycle;        ///< Current cycle of the simulation.
     BreakPointManager&  m_bp_manager;   ///< The breakpoint checker for debugging.
+	FaultInjector       m_faultInjector; ///< The fault injector to use for this kernel.
     unsigned long long  m_master_freq;  ///< Master frequency
     Process*            m_process;      ///< The currently executing process.
     std::vector<Clock*> m_clocks;       ///< All clocks in the system.
@@ -353,6 +344,7 @@ public:
         //const ComponentList& GetComponents() const { return m_components; }
 
     inline BreakPointManager& GetBreakPointManager() const { return m_bp_manager; }
+	inline FaultInjector& GetFaultInjector() { return m_faultInjector; }
 };
 
 inline CycleNo Clock::GetCycleNo() const

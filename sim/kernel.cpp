@@ -449,6 +449,9 @@ bool Kernel::UpdateStorages()
         }
         clock->m_activeStorages = NULL;
     }
+    //BEGIN FT
+	m_faultInjector.CheckCycle(m_cycle);
+	// END FT
     return updated;
 }
 
@@ -483,6 +486,7 @@ Kernel::Kernel(BreakPointManager& breakpoints)
  : m_lastsuspend((CycleNo)-1),
    m_cycle(0),
    m_bp_manager(breakpoints),
+   m_faultInjector(),
    m_master_freq(0),
    m_process(NULL),
    m_clocks(),

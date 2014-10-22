@@ -20,6 +20,15 @@ Processor::FamilyTable::FamilyTable(const std::string& name, Processor& parent, 
     RegisterSampleVariableInObject(m_maxalloc, SVC_WATERMARK, m_families.size());
     RegisterSampleVariableInObject(m_curalloc, SVC_LEVEL, m_families.size());
     RegisterSampleVariableInObject(m_lastcycle, SVC_CUMULATIVE);
+	RegisterSampleVariableInObject(m_families[0].pc, SVC_STATE);
+	RegisterSampleVariableInObject(m_families[0].capability, SVC_STATE);
+	RegisterSampleVariableInObject(m_families[0].step, SVC_STATE);
+	RegisterSampleVariableInObject(m_families[0].link, SVC_STATE);
+	RegisterSampleVariableInObject(m_families[0].sync.reg, SVC_STATE);
+	RegisterSampleVariableInObject(m_families[0].corr_fid, SVC_STATE);
+	RegisterSampleVariableInObject(m_families[0].broken, SVC_STATE);
+	RegisterSampleVariableInObject(m_families[0].dependencies.numPendingReads, SVC_STATE);
+	
 
     for (size_t i = 0; i < m_families.size(); ++i)
     {
